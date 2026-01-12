@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.tu.biblialite'
+    namespace 'com.biblia.lite'
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.tu.biblialite"
+        applicationId "com.biblia.lite"
         minSdk 21
         targetSdk 33
         versionCode 1
@@ -17,14 +17,6 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-        }
-    }
-
-    sourceSets {
-        main {
-            manifest.srcFile 'src/main/AndroidManifest.xml'
-            java.srcDirs = ['src/main/java']
-            assets.srcDirs = ['src/main/assets']
         }
     }
 }
