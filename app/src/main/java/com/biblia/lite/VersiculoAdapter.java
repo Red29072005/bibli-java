@@ -1,5 +1,6 @@
 package com.biblia.lite;
 
+import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,47 +11,46 @@ import java.util.List;
 
 public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.ViewHolder> {
     private List<String> versiculos;
-    private int size;
-    private boolean dark;
-    private OnAction listener;
+    private int fontSize;
+    private boolean isDark;
 
-    public interface OnAction { void onLongClick(int pos); }
-
-    public VersiculoAdapter(List<String> versiculos, int size, boolean dark, OnAction listener) {
+    public VersiculoAdapter(List<String> versiculos, int fontSize, boolean isDark) {
         this.versiculos = versiculos;
-        this.size = size;
-        this.dark = dark;
-        this.listener = listener;
+        this.fontSize = fontSize;
+        this.isDark = isDark;
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(android.R.layout.simple_list_item_1, parent, false);
+        // Usamos un layout simple pero controlamos los colores por código
+        View view = LayoutInflater.from(parent.getContext()).inflate(android.R.id.text1, parent, false);
+        if (!(view instanceof TextView)) {
+            view = new TextView(parent.getContext());
+            view.setPadding(20, 10, 20, 10);
+        }
         return new ViewHolder(view);
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        holder.textView.setText((position + 1) + " " + versiculos.get(position));
-        holder.textView.setTextSize(size);
-        holder.textView.setTextColor(dark ? 0xFFFFFFFF : 0xFF000000);
+        TextView tv = (TextView) holder.itemView;
+        tv.setText((position + 1) + " " + versiculos.get(position));
+        tv.setTextSize(fontSize);
         
-        holder.itemView.setOnLongClickListener(v -> {
-            listener.onLongClick(position);
-            holder.textView.setBackgroundColor(0x33BB86FC);
-            return true;
-        });
+        // Colores de alto contraste
+        tv.setTextColor(isDark ? Color.WHITE : Color.BLACK);
+        tv.setBackgroundColor(isDark ? Color.BLACK : Color.WHITE);
     }
 
     @Override
-    public int getItemCount() { return versiculos.size(); }
+    public int getItemCount() {
+        return versiculos.size();
+    }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView textView;
         public ViewHolder(View view) {
             super(view);
-            textView = view.findViewById(android.R.id.text1);
         }
     }
 }
