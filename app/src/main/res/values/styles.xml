@@ -1,0 +1,11 @@
+<resources>
+    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#BB86FC</item>
+        <item name="android:statusBarColor">#121212</item>
+    </style>
+    
+    <style name="SplashTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">#121212</item>
+    </style>
+</resources>

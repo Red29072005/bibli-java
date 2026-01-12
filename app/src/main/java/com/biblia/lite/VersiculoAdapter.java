@@ -10,9 +10,17 @@ import java.util.List;
 
 public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.ViewHolder> {
     private List<String> versiculos;
+    private int size;
+    private boolean dark;
+    private OnAction listener;
 
-    public VersiculoAdapter(List<String> versiculos) {
+    public interface OnAction { void onLongClick(int pos); }
+
+    public VersiculoAdapter(List<String> versiculos, int size, boolean dark, OnAction listener) {
         this.versiculos = versiculos;
+        this.size = size;
+        this.dark = dark;
+        this.listener = listener;
     }
 
     @NonNull
@@ -24,13 +32,19 @@ public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.View
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        holder.textView.setText(versiculos.get(position));
+        holder.textView.setText((position + 1) + " " + versiculos.get(position));
+        holder.textView.setTextSize(size);
+        holder.textView.setTextColor(dark ? 0xFFFFFFFF : 0xFF000000);
+        
+        holder.itemView.setOnLongClickListener(v -> {
+            listener.onLongClick(position);
+            holder.textView.setBackgroundColor(0x33BB86FC);
+            return true;
+        });
     }
 
     @Override
-    public int getItemCount() {
-        return versiculos.size();
-    }
+    public int getItemCount() { return versiculos.size(); }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView textView;
