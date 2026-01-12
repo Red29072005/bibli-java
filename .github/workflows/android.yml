@@ -10,14 +10,12 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Build with Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: 8.0 # Forzamos la versión 8.0 aquí mismo
+          gradle-version: '8.0' # <--- Con comillas y .0 es más seguro
           arguments: assembleDebug
-          build-root-directory: .
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
