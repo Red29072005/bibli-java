@@ -4,7 +4,6 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.widget.Button;
-import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -20,11 +19,10 @@ public class MainActivity extends AppCompatActivity {
     private VersiculoAdapter adapter;
     private List<String> listaVersiculos = new ArrayList<>();
     private int capituloActual = 1;
-    private String libroActual = "Genesis";
     private SQLiteDatabase db;
 
     @Override
-    protected void Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -79,15 +77,14 @@ public class MainActivity extends AppCompatActivity {
 
     private void cargarCapitulo() {
         listaVersiculos.clear();
+        // Usamos book_id=1 (Génesis) para la prueba inicial
         Cursor cursor = db.rawQuery("SELECT text FROM verses WHERE book_id=1 AND chapter=" + capituloActual, null);
         if (cursor.moveToFirst()) {
             do {
                 String rawText = cursor.getString(0);
-                // CORRECCIÓN AQUÍ: Doble barra \ para que Java no falle
-                String clean = rawText.replaceAll("<[^>]+>|\\[\\d+\\]|[\\u2460-\\u24FF]", "")
-                                      .replaceAll("\\s+", " ")
-                                      .replace(" ,", ",")
-                                      .replace(" .", ".")
+                // Limpieza de etiquetas XML y caracteres raros de la DB
+                String clean = rawText.replaceAll("<[^>]+>", "")
+                                      .replaceAll("\\[.*?\\]", "")
                                       .trim();
                 listaVersiculos.add(clean);
             } while (cursor.moveToNext());
