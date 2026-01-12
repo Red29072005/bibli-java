@@ -1,199 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/mainContainer"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FAFAFA">
+    android:background="#121212"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Biblia Lite"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="16dp" />
 
     <LinearLayout
-        android:id="@+id/viewInicio"
+        android:id="@+id/llControls"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="30dp"
-        android:visibility="visible">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="BIBLIA"
-            android:textSize="36sp"
-            android:textStyle="bold"
-            android:textColor="#333333"/>
-
-        <Space android:layout_width="match_parent" android:layout_height="40dp"/>
-
-        <Spinner
-            android:id="@+id/ddVersion"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:background="@android:drawable/btn_dropdown"/>
-
-        <Space android:layout_width="match_parent" android:layout_height="30dp"/>
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvTitle"
+        android:orientation="horizontal"
+        android:weightSum="2">
 
         <Button
-            android:id="@+id/btnLeerAhora"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:text="LEER AHORA"
-            android:textSize="18sp"/>
-
-        <Space android:layout_width="match_parent" android:layout_height="20dp"/>
-
-        <Button
-            android:id="@+id/btnAjustesHome"
-            android:layout_width="wrap_content"
+            android:id="@+id/btnPrev"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="AJUSTES"
-            style="@style/Widget.MaterialComponents.Button.TextButton"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/viewLectura"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="gone"
-        android:background="#FFFFFF">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="10dp"
-            android:background="#EEEEEE">
-            
-            <Button
-                android:id="@+id/btnTituloLibro"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"
-                android:text="Génesis 1"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:textColor="#000000"
-                android:textStyle="bold"/>
-
-            <Button
-                android:id="@+id/btnMenuLectura"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="MENU"
-                style="@style/Widget.MaterialComponents.Button.TextButton"/>
-        </LinearLayout>
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerVersiculos"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
             android:layout_weight="1"
-            android:padding="10dp"
-            android:scrollbars="vertical"/>
+            android:text="Anterior"
+            android:layout_marginEnd="4dp" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:gravity="center"
-            android:background="#EEEEEE">
-            <Button
-                android:id="@+id/btnAnt"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="<< ANT"
-                style="@style/Widget.MaterialComponents.Button.TextButton"/>
-            <Space android:layout_width="20dp" android:layout_height="match_parent"/>
-            <Button
-                android:id="@+id/btnSig"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="SIG >>"
-                style="@style/Widget.MaterialComponents.Button.TextButton"/>
-        </LinearLayout>
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Siguiente"
+            android:layout_marginStart="4dp" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/viewLibros"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvVersiculos"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="gone"
-        android:background="#FAFAFA">
-        <Button
-            android:id="@+id/btnVolverLibros"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="VOLVER"/>
-        <ListView
-            android:id="@+id/listLibros"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-    </LinearLayout>
+        android:layout_below="@id/llControls"
+        android:layout_marginTop="16dp" />
 
-    <LinearLayout
-        android:id="@+id/viewCaps"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="gone"
-        android:background="#FAFAFA">
-        <Button
-            android:id="@+id/btnVolverCaps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="VOLVER A LIBROS"/>
-        <GridView
-            android:id="@+id/gridCaps"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:numColumns="5"
-            android:padding="10dp"
-            android:horizontalSpacing="10dp"
-            android:verticalSpacing="10dp"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/viewAjustes"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:padding="20dp"
-        android:visibility="gone"
-        android:background="#FAFAFA"
-        android:gravity="center_horizontal">
-        
-        <TextView android:text="CONFIGURACIÓN" android:textSize="24sp" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <Space android:layout_height="20dp" android:layout_width="match_parent"/>
-        
-        <Switch
-            android:id="@+id/switchTema"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Modo Oscuro"
-            android:textSize="18sp"/>
-            
-        <Space android:layout_height="20dp" android:layout_width="match_parent"/>
-        <TextView android:text="Tamaño de letra:" android:layout_width="match_parent" android:layout_height="wrap_content"/>
-        <SeekBar
-            android:id="@+id/seekFuente"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="40"
-            android:min="14"
-            android:progress="18"/>
-            
-        <TextView
-            android:id="@+id/txtPreview"
-            android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:text="Así se verá el texto sagrado."
-            android:gravity="center"
-            android:background="@drawable/border_bg"/>
-            
-        <Space android:layout_height="30dp" android:layout_width="match_parent"/>
-        <Button
-            android:id="@+id/btnVolverAjustes"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="VOLVER"/>
-    </LinearLayout>
-</FrameLayout>
+</RelativeLayout>
