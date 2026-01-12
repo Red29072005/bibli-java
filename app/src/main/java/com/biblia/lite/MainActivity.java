@@ -77,19 +77,20 @@ public class MainActivity extends AppCompatActivity {
 
     private void cargarCapitulo() {
         listaVersiculos.clear();
-        // Usamos book_id=1 (Génesis) para la prueba inicial
-        Cursor cursor = db.rawQuery("SELECT text FROM verses WHERE book_id=1 AND chapter=" + capituloActual, null);
-        if (cursor.moveToFirst()) {
-            do {
-                String rawText = cursor.getString(0);
-                // Limpieza de etiquetas XML y caracteres raros de la DB
-                String clean = rawText.replaceAll("<[^>]+>", "")
-                                      .replaceAll("\\[.*?\\]", "")
-                                      .trim();
-                listaVersiculos.add(clean);
-            } while (cursor.moveToNext());
+        try {
+            Cursor cursor = db.rawQuery("SELECT text FROM verses WHERE book_id=1 AND chapter=" + capituloActual, null);
+            if (cursor.moveToFirst()) {
+                do {
+                    String rawText = cursor.getString(0);
+                    String clean = rawText.replaceAll("<[^>]+>", "").trim();
+                    listaVersiculos.add(clean);
+                } while (cursor.moveToNext());
+            }
+            cursor.close();
+        } catch (Exception e) {
+            listaVersiculos.add("Error al cargar: " + e.getMessage());
         }
-        cursor.close();
+        
         adapter = new VersiculoAdapter(listaVersiculos);
         rvVersiculos.setAdapter(adapter);
     }
