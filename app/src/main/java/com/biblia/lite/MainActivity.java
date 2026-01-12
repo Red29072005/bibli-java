@@ -3,10 +3,14 @@ package com.biblia.lite;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
-import android.widget.Button;
+import android.view.View;
+import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -18,80 +22,98 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView rvVersiculos;
     private VersiculoAdapter adapter;
     private List<String> listaVersiculos = new ArrayList<>();
+    private SQLiteDatabase dbBiblia;
+    private UserDatabaseHelper userDbHelper;
+    
+    // Configuración de estado actual
+    private String versionActual = "PDT.SQLite3"; 
+    private int libroActual = 1;
     private int capituloActual = 1;
-    private SQLiteDatabase db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // 1. Inicializar base de datos de usuario (Crea user.db si no existe)
+        userDbHelper = new UserDatabaseHelper(this);
+        
+        // 2. Configurar Interfaz
         rvVersiculos = findViewById(R.id.rvVersiculos);
         rvVersiculos.setLayoutManager(new LinearLayoutManager(this));
         
-        Button btnPrev = findViewById(R.id.btnPrev);
-        Button btnNext = findViewById(R.id.btnNext);
-
-        copiarBaseDatos("RVR1960.db");
-        abrirBaseDatos("RVR1960.db");
-
-        cargarCapitulo();
-
-        btnPrev.setOnClickListener(v -> {
-            if (capituloActual > 1) {
-                capituloActual--;
-                cargarCapitulo();
-            }
-        });
-
-        btnNext.setOnClickListener(v -> {
-            capituloActual++;
-            cargarCapitulo();
-        });
+        setupNavigation();
+        
+        // 3. Cargar Biblia
+        prepararYAbirBiblia();
     }
 
-    private void copiarBaseDatos(String nombre) {
-        File archivoDb = getDatabasePath(nombre);
-        if (!archivoDb.exists()) {
-            archivoDb.getParentFile().mkdirs();
-            try {
-                InputStream is = getAssets().open(nombre);
-                OutputStream os = new FileOutputStream(archivoDb);
-                byte[] buffer = new byte[1024];
-                int largo;
-                while ((largo = is.read(buffer)) > 0) {
-                    os.write(buffer, 0, largo);
-                }
-                os.flush();
-                os.close();
-                is.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+    private void prepararYAbirBiblia() {
+        try {
+            copiarArchivoDesdeAssets(versionActual);
+            dbBiblia = SQLiteDatabase.openDatabase(getDatabasePath(versionActual).getPath(), null, SQLiteDatabase.OPEN_READONLY);
+            cargarTexto();
+        } catch (Exception e) {
+            Toast.makeText(this, "Error al cargar biblia: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void abrirBaseDatos(String nombre) {
-        db = SQLiteDatabase.openDatabase(getDatabasePath(nombre).getPath(), null, SQLiteDatabase.OPEN_READONLY);
+    private void copiarArchivoDesdeAssets(String nombre) throws Exception {
+        File destino = getDatabasePath(nombre);
+        if (!destino.exists()) {
+            destino.getParentFile().mkdirs();
+            InputStream is = getAssets().open(nombre);
+            OutputStream os = new FileOutputStream(destino);
+            byte[] buffer = new byte[1024];
+            int largo;
+            while ((largo = is.read(buffer)) > 0) {
+                os.write(buffer, 0, largo);
+            }
+            os.flush(); os.close(); is.close();
+        }
     }
 
-    private void cargarCapitulo() {
+    private void cargarTexto() {
+        if (dbBiblia == null) return;
         listaVersiculos.clear();
         try {
-            Cursor cursor = db.rawQuery("SELECT text FROM verses WHERE book_id=1 AND chapter=" + capituloActual, null);
-            if (cursor.moveToFirst()) {
+            // Consulta estándar para la mayoría de .SQLite3 de biblias
+            Cursor c = dbBiblia.rawQuery("SELECT text FROM verses WHERE book_id=" + libroActual + " AND chapter=" + capituloActual, null);
+            if (c.moveToFirst()) {
                 do {
-                    String rawText = cursor.getString(0);
-                    String clean = rawText.replaceAll("<[^>]+>", "").trim();
+                    String clean = c.getString(0).replaceAll("<[^>]+>", "").trim();
                     listaVersiculos.add(clean);
-                } while (cursor.moveToNext());
+                } while (c.moveToNext());
             }
-            cursor.close();
+            c.close();
         } catch (Exception e) {
-            listaVersiculos.add("Error al cargar: " + e.getMessage());
+            listaVersiculos.add("Error en tablas: " + e.getMessage());
         }
-        
         adapter = new VersiculoAdapter(listaVersiculos);
         rvVersiculos.setAdapter(adapter);
+    }
+
+    private void setupNavigation() {
+        BottomNavigationView nav = findViewById(R.id.bottom_navigation);
+        nav.setOnItemSelectedListener(item -> {
+            int id = item.getItemId();
+            if (id == R.id.nav_books) {
+                abrirSelectorLibros();
+                return true;
+            } else if (id == R.id.nav_settings) {
+                Toast.makeText(this, "Ajustes próximamente", Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            return true;
+        });
+    }
+
+    private void abrirSelectorLibros() {
+        BottomSheetDialog bottomSheet = new BottomSheetDialog(this);
+        View view = getLayoutInflater().inflate(android.R.layout.simple_list_item_1, null);
+        TextView tv = view.findViewById(android.R.id.text1);
+        tv.setText("Selector de Libros (Próximamente)");
+        bottomSheet.setContentView(view);
+        bottomSheet.show();
     }
 }
