@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -22,17 +23,9 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView rvVersiculos;
     private VersiculoAdapter adapter;
     private List<String> listaVersiculos = new ArrayList<>();
-    private SQLiteDatabase dbBiblia;
+    private SQLiteDatabase dbBiblia, dbNotas;
     private String versionActual = "NVI'22.SQLite3"; 
     private int libroId = 1, capituloActual = 1;
-
-    // --- CONFIGURACIÓN POR VERSIÓN (Mapper) ---
-    private String getLibrosQuery() {
-        if (versionActual.contains("PDT") || versionActual.contains("DHHS")) {
-            return "SELECT book_number, long_name FROM books_all ORDER BY book_number";
-        }
-        return "SELECT book_number, long_name FROM books ORDER BY book_number";
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,131 +41,165 @@ public class MainActivity extends AppCompatActivity {
     private void abrirBiblia() {
         try {
             if (dbBiblia != null) dbBiblia.close();
-            File f = getDatabasePath(versionActual);
-            if (!f.exists() || f.length() == 0) {
-                f.getParentFile().mkdirs();
-                InputStream is = getAssets().open(versionActual);
-                FileOutputStream os = new FileOutputStream(f);
-                byte[] buffer = new byte[1024];
-                int read;
-                while ((read = is.read(buffer)) > 0) os.write(buffer, 0, read);
-                os.close(); is.close();
-            }
+            if (dbNotas != null) dbNotas.close();
+
+            // COPIA FORZADA: Esto garantiza que el archivo en el móvil sea igual al del PC
+            File f = forzarCopia(versionActual);
             dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+            
+            // Copia de Notas
+            String nNota = versionActual.replace(".SQLite3", ".commentaries.SQLite3");
+            try {
+                File fn = forzarCopia(nNota);
+                dbNotas = SQLiteDatabase.openDatabase(fn.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+            } catch (Exception e) { dbNotas = null; } // Si no hay notas, no pasa nada
+            
             render();
         } catch (Exception e) {
-            Toast.makeText(this, "Error DB: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error al cargar la Biblia", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private File forzarCopia(String name) throws Exception {
+        File f = new File(getFilesDir(), name);
+        InputStream is = getAssets().open(name);
+        FileOutputStream os = new FileOutputStream(f);
+        byte[] buffer = new byte[1024];
+        int read;
+        while ((read = is.read(buffer)) > 0) os.write(buffer, 0, read);
+        os.close(); is.close();
+        return f;
     }
 
     private void render() {
         if (dbBiblia == null) return;
         listaVersiculos.clear();
         try {
-            // 1. Título dinámico (Busca según la tabla que corresponda)
-            String tablaLibros = versionActual.contains("PDT") || versionActual.contains("DHHS") ? "books_all" : "books";
-            Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM " + tablaLibros + " WHERE book_number = " + libroId, null);
-            if (cb.moveToFirst()) {
-                if (getSupportActionBar() != null) getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
-            }
-            cb.close();
+            // 1. Obtener Nombre del Libro (Prueba books, si falla usa books_all)
+            String nombreLibro = "Libro " + libroId;
+            Cursor cb = null;
+            try {
+                cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = " + libroId, null);
+                if (cb.moveToFirst()) nombreLibro = cb.getString(0);
+            } catch (Exception e) {
+                cb = dbBiblia.rawQuery("SELECT long_name FROM books_all WHERE book_number = " + libroId, null);
+                if (cb.moveToFirst()) nombreLibro = cb.getString(0);
+            } finally { if(cb != null) cb.close(); }
+            
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle(nombreLibro + " " + capituloActual);
 
-            // 2. Cargar Versículos (book_number es NUMERIC en todas según tu reporte)
+            // 2. Cargar Versículos (book_number es NUMERIC en todas)
             Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number = " + libroId + " AND chapter = " + capituloActual + " ORDER BY verse ASC", null);
             
             while (c.moveToNext()) {
-                String numV = c.getString(0);
-                String txt = c.getString(1).replaceAll("<[^>]+>", "").replaceAll("\\[\\d+\\]", "").trim();
-                listaVersiculos.add(numV + " " + txt);
+                int nV = c.getInt(0);
+                String txt = c.getString(1).replaceAll("<[^>]+>", "").trim();
+                
+                if (tieneNota(nV)) txt += " [#]";
+                listaVersiculos.add(nV + " " + txt);
             }
             c.close();
 
             adapter = new VersiculoAdapter(listaVersiculos, 18, true);
+            adapter.setOnItemClickListener(pos -> {
+                String vText = listaVersiculos.get(pos);
+                if (vText.contains("[#]")) {
+                    mostrarNota(Integer.parseInt(vText.split(" ")[0]));
+                }
+            });
             rvVersiculos.setAdapter(adapter);
-            
-            if (listaVersiculos.isEmpty()) {
-                Toast.makeText(this, "No hay versículos en este capítulo", Toast.LENGTH_SHORT).show();
-            }
+
         } catch (Exception e) {
-            Toast.makeText(this, "Error lectura: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Error al mostrar texto", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private boolean tieneNota(int v) {
+        if (dbNotas == null) return false;
+        try {
+            Cursor c = dbNotas.rawQuery("SELECT 1 FROM commentaries WHERE book_number=" + libroId + " AND chapter_number_from=" + capituloActual + " AND verse_number_from=" + v, null);
+            boolean ex = c.moveToFirst(); c.close(); return ex;
+        } catch (Exception e) { return false; }
+    }
+
+    private void mostrarNota(int v) {
+        if (dbNotas == null) return;
+        Cursor c = dbNotas.rawQuery("SELECT text FROM commentaries WHERE book_number=" + libroId + " AND chapter_number_from=" + capituloActual + " AND verse_number_from=" + v, null);
+        if (c.moveToFirst()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Nota v." + v)
+                .setMessage(c.getString(0).replaceAll("<[^>]+>", "").trim())
+                .setPositiveButton("CERRAR", null)
+                .show();
+        }
+        c.close();
     }
 
     private void mostrarSelectorLibros() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
-        List<String> nombres = new ArrayList<>();
-        final List<Integer> ids = new ArrayList<>();
-
+        List<String> n = new ArrayList<>(); final List<Integer> ids = new ArrayList<>();
+        
+        // Intentar books, si falla books_all
+        Cursor c = null;
         try {
-            Cursor c = dbBiblia.rawQuery(getLibrosQuery(), null);
-            while (c.moveToNext()) {
-                ids.add(c.getInt(0));
-                nombres.add(c.getString(1));
-            }
-            c.close();
+            c = dbBiblia.rawQuery("SELECT book_number, long_name FROM books ORDER BY book_number", null);
         } catch (Exception e) {
-            Toast.makeText(this, "Error cargando libros", Toast.LENGTH_SHORT).show();
+            c = dbBiblia.rawQuery("SELECT book_number, long_name FROM books_all ORDER BY book_number", null);
         }
 
-        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
-        lv.setOnItemClickListener((ad, vi, pos, id) -> {
-            libroId = ids.get(pos); // ID REAL de la base de datos, no la posición de la lista
+        while(c != null && c.moveToNext()){
+            ids.add(c.getInt(0));
+            n.add(c.getString(1));
+        }
+        if(c != null) c.close();
+
+        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, n));
+        lv.setOnItemClickListener((ad,vi,pos,id) -> {
+            libroId = ids.get(pos);
             d.dismiss();
             mostrarSelectorCapitulos();
         });
-        d.setContentView(lv);
-        d.show();
+        d.setContentView(lv); d.show();
     }
 
     private void mostrarSelectorCapitulos() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
         List<String> caps = new ArrayList<>();
-        try {
-            // Buscamos el máximo capítulo para ese libro específico
-            Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number = " + libroId, null);
-            int max = (c.moveToFirst()) ? c.getInt(0) : 1;
-            c.close();
-            for (int i = 1; i <= max; i++) caps.add("Capítulo " + i);
-        } catch (Exception e) {
-            for (int i = 1; i <= 50; i++) caps.add("Capítulo " + i);
-        }
-
+        Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number=" + libroId, null);
+        int max = (c.moveToFirst()) ? c.getInt(0) : 1; c.close();
+        for(int i=1; i<=max; i++) caps.add("Capítulo " + i);
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, caps));
-        lv.setOnItemClickListener((ad, vi, pos, id) -> {
-            capituloActual = pos + 1;
+        lv.setOnItemClickListener((ad,vi,pos,id) -> {
+            capituloActual = pos+1;
             d.dismiss();
             render();
         });
-        d.setContentView(lv);
-        d.show();
+        d.setContentView(lv); d.show();
     }
 
     private void setupNavigation() {
         BottomNavigationView nav = findViewById(R.id.bottom_navigation);
         nav.setOnItemSelectedListener(item -> {
-            int id = item.getItemId();
-            if (id == R.id.nav_books) mostrarSelectorLibros();
-            else if (id == R.id.nav_versions) mostrarSelectorVersiones();
+            if (item.getItemId() == R.id.nav_books) mostrarSelectorLibros();
+            else mostrarSelectorVersiones();
             return true;
         });
     }
 
     private void mostrarSelectorVersiones() {
         BottomSheetDialog d = new BottomSheetDialog(this);
-        String[] nombres = {"NVI", "LBLA", "DHHS", "PDT"};
-        final String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"};
+        String[] n = {"NVI", "LBLA", "DHHS", "PDT"};
+        final String[] a = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"};
         ListView lv = new ListView(this);
-        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
-        lv.setOnItemClickListener((ad, vi, pos, id) -> {
-            versionActual = archivos[pos];
-            libroId = 1; // Resetear al primer libro para evitar errores entre versiones
-            capituloActual = 1;
+        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, n));
+        lv.setOnItemClickListener((ad,vi,pos,id) -> {
+            versionActual = a[pos];
+            libroId=1; capituloActual=1;
             abrirBiblia();
             d.dismiss();
         });
-        d.setContentView(lv);
-        d.show();
+        d.setContentView(lv); d.show();
     }
 }
