@@ -4,12 +4,11 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.view.View;
+import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -32,9 +31,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
         
         rvVersiculos = findViewById(R.id.rvVersiculos);
         rvVersiculos.setLayoutManager(new LinearLayoutManager(this));
@@ -59,49 +55,51 @@ public class MainActivity extends AppCompatActivity {
             dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
             render();
         } catch (Exception e) {
-            Toast.makeText(this, "Error DB: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Error abriendo base de datos", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void render() {
-        if (dbBiblia == null || !dbBiblia.isOpen()) return;
-        
+        if (dbBiblia == null) return;
         listaVersiculos.clear();
-        
         try {
-            // 1. Título del libro (idéntico a obtener_id_libro en Python) [cite: 3]
-            Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = ?", 
-                new String[]{String.valueOf(libroId)});
-            if (cb.moveToFirst()) {
-                getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
+            // Intentamos obtener el nombre del libro de forma segura
+            String nombreLibro = "Libro " + libroId;
+            Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = LIMIT 1", null);
+            // Si falla la tabla 'books', intentamos 'books_all' (como en la PDT)
+            try {
+                cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = ?", new String[]{String.valueOf(libroId)});
+                if (cb.moveToFirst()) nombreLibro = cb.getString(0);
+            } catch (Exception e) {
+                cb = dbBiblia.rawQuery("SELECT long_name FROM books_all WHERE book_number = ?", new String[]{String.valueOf(libroId)});
+                if (cb.moveToFirst()) nombreLibro = cb.getString(0);
             }
             cb.close();
+            if (getSupportActionBar() != null) getSupportActionBar().setTitle(nombreLibro + " " + capituloActual);
 
-            // 2. Consulta de versículos (Copia exacta de obtener_texto en app.py) [cite: 3]
-            // Traemos 'verse' y 'text' para evitar errores de índice
+            // CONSULTA DE TEXTO (Blindada)
             Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number = ? AND chapter = ? ORDER BY verse ASC", 
                 new String[]{String.valueOf(libroId), String.valueOf(capituloActual)});
             
-            // Usamos getColumnIndex para que no importe el orden de las columnas en la DB [cite: 2, 3]
-            int indexTexto = c.getColumnIndex("text");
-            int indexVerso = c.getColumnIndex("verse");
+            int colText = c.getColumnIndex("text");
+            int colVerse = c.getColumnIndex("verse");
 
             while (c.moveToNext()) {
-                String numV = c.getString(indexVerso);
-                String txt = c.getString(indexTexto);
+                String numV = (colVerse != -1) ? c.getString(colVerse) : String.valueOf(c.getPosition() + 1);
+                String txt = (colText != -1) ? c.getString(colText) : "Error en columna text";
                 
-                // Limpieza de etiquetas (Equivalente al re.sub de Python) [cite: 3]
-                txt = txt.replaceAll("<[^>]+>", "").trim();
-                
+                // Limpieza idéntica a tu app.py
+                txt = txt.replaceAll("<[^>]+>", "").replaceAll("\\[\\d+\\]", "").trim();
                 listaVersiculos.add(numV + " " + txt);
             }
             c.close();
 
             adapter = new VersiculoAdapter(listaVersiculos, 18, true);
             rvVersiculos.setAdapter(adapter);
-            
+
         } catch (Exception e) {
-            Toast.makeText(this, "Error en lectura: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Log.e("ERRO_BIBLIA", e.getMessage());
+            Toast.makeText(this, "Error al cargar capítulos", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -118,22 +116,23 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorLibros() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
-        List<String> nombresLibros = new ArrayList<>();
-        final List<Integer> idsLibros = new ArrayList<>();
-        
-        // Obtenemos book_number y nombre como en el orden_maestro de Python 
-        Cursor c = dbBiblia.rawQuery("SELECT book_number, long_name FROM books ORDER BY book_number", null);
-        while(c.moveToNext()) {
-            idsLibros.add(c.getInt(0));
-            nombresLibros.add(c.getString(1));
+        List<String> nombres = new ArrayList<>();
+        // Lógica para obtener libros de cualquier tabla disponible
+        try {
+            Cursor c = dbBiblia.rawQuery("SELECT long_name FROM books ORDER BY book_number", null);
+            while(c.moveToNext()) nombres.add(c.getString(0));
+            c.close();
+        } catch (Exception e) {
+            Cursor c = dbBiblia.rawQuery("SELECT long_name FROM books_all ORDER BY book_number", null);
+            while(c.moveToNext()) nombres.add(c.getString(0));
+            c.close();
         }
-        c.close();
         
-        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombresLibros));
+        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
-            libroId = idsLibros.get(pos);
+            libroId = pos + 1;
             d.dismiss();
-            mostrarSelectorCapitulos(); // Salta directamente a elegir capítulo
+            mostrarSelectorCapitulos();
         });
         d.setContentView(lv);
         d.show();
@@ -142,15 +141,12 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorCapitulos() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
-        
-        // Lógica contar_capitulos de Python 
         Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number = ?", new String[]{String.valueOf(libroId)});
-        int maxCap = c.moveToFirst() ? c.getInt(0) : 1;
+        int maxCap = (c.moveToFirst()) ? c.getInt(0) : 50;
         c.close();
 
         List<String> caps = new ArrayList<>();
         for(int i=1; i<=maxCap; i++) caps.add("Capítulo " + i);
-
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, caps));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
             capituloActual = pos + 1;
@@ -164,8 +160,7 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorVersiones() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         String[] nombres = {"NVI", "LBLA", "DHHS", "PDT"};
-        final String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"}; 
-        
+        String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"};
         ListView lv = new ListView(this);
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
