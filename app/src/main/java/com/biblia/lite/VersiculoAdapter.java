@@ -11,46 +11,52 @@ import java.util.List;
 
 public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.ViewHolder> {
     private List<String> versiculos;
-    private int fontSize;
-    private boolean isDark;
+    private int tamanoTexto;
+    private boolean modoNoche;
+    private OnItemClickListener listener; // <--- Importante
 
-    public VersiculoAdapter(List<String> versiculos, int fontSize, boolean isDark) {
+    // La pieza que faltaba
+    public interface OnItemClickListener {
+        void onItemClick(int position);
+    }
+
+    public void setOnItemClickListener(OnItemClickListener listener) {
+        this.listener = listener;
+    }
+
+    public VersiculoAdapter(List<String> versiculos, int tamanoTexto, boolean modoNoche) {
         this.versiculos = versiculos;
-        this.fontSize = fontSize;
-        this.isDark = isDark;
+        this.tamanoTexto = tamanoTexto;
+        this.modoNoche = modoNoche;
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        // Usamos un layout simple pero controlamos los colores por código
-        View view = LayoutInflater.from(parent.getContext()).inflate(android.R.id.text1, parent, false);
-        if (!(view instanceof TextView)) {
-            view = new TextView(parent.getContext());
-            view.setPadding(20, 10, 20, 10);
-        }
-        return new ViewHolder(view);
+        View v = LayoutInflater.from(parent.getContext()).inflate(android.R.layout.simple_list_item_1, parent, false);
+        return new ViewHolder(v);
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        TextView tv = (TextView) holder.itemView;
-        tv.setText((position + 1) + " " + versiculos.get(position));
-        tv.setTextSize(fontSize);
+        holder.textView.setText(versiculos.get(position));
+        holder.textView.setTextSize(tamanoTexto);
+        holder.textView.setTextColor(modoNoche ? Color.WHITE : Color.BLACK);
         
-        // Colores de alto contraste
-        tv.setTextColor(isDark ? Color.WHITE : Color.BLACK);
-        tv.setBackgroundColor(isDark ? Color.BLACK : Color.WHITE);
+        // Detectar el toque en el versículo
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) listener.onItemClick(position);
+        });
     }
 
     @Override
-    public int getItemCount() {
-        return versiculos.size();
-    }
+    public int getItemCount() { return versiculos.size(); }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        public ViewHolder(View view) {
-            super(view);
+        TextView textView;
+        public ViewHolder(@NonNull View v) {
+            super(v);
+            textView = v.findViewById(android.R.id.text1);
         }
     }
 }

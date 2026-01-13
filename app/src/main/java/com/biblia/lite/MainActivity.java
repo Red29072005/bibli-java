@@ -101,10 +101,18 @@ public class MainActivity extends AppCompatActivity {
             c.close();
 
             adapter = new VersiculoAdapter(listaVersiculos, 18, true);
-            adapter.setOnItemClickListener(pos -> {
-                String vText = listaVersiculos.get(pos);
-                if (vText.contains("[#]")) {
-                    mostrarNota(Integer.parseInt(vText.split(" ")[0]));
+            adapter.setOnItemClickListener(new VersiculoAdapter.OnItemClickListener() {
+                @Override
+                public void onItemClick(int pos) {
+                    String vText = listaVersiculos.get(pos);
+                    if (vText.contains("[#]")) {
+                        // Extraemos el número del versículo (lo primero antes del espacio)
+                        String[] partes = vText.split(" ");
+                        try {
+                            int num = Integer.parseInt(partes[0]);
+                            mostrarNota(num);
+                        } catch (Exception e) { /* error de parseo */ }
+                    }
                 }
             });
             rvVersiculos.setAdapter(adapter);
