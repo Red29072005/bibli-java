@@ -64,27 +64,45 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void render() {
-        listaVersiculos.clear();
-        // Obtener nombre largo del libro para el Toolbar
-        Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = ?", new String[]{String.valueOf(libroId)});
-        if (cb.moveToFirst()) {
-            getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
-        }
-        cb.close();
-
-        // Consulta de versículos idéntica a obtener_texto en app.py 
-        Cursor c = dbBiblia.rawQuery("SELECT text FROM verses WHERE book_number = ? AND chapter = ? ORDER BY verse ASC", 
-            new String[]{String.valueOf(libroId), String.valueOf(capituloActual)});
+        if (dbBiblia == null || !dbBiblia.isOpen()) return;
         
-        while (c.moveToNext()) {
-            // Limpieza de etiquetas HTML/SQLite como en Python 
-            String txt = c.getString(0).replaceAll("<[^>]+>", "").trim();
-            listaVersiculos.add(txt);
-        }
-        c.close();
+        listaVersiculos.clear();
+        
+        try {
+            // 1. Título del libro (idéntico a obtener_id_libro en Python) [cite: 3]
+            Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = ?", 
+                new String[]{String.valueOf(libroId)});
+            if (cb.moveToFirst()) {
+                getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
+            }
+            cb.close();
 
-        adapter = new VersiculoAdapter(listaVersiculos, 18, true);
-        rvVersiculos.setAdapter(adapter);
+            // 2. Consulta de versículos (Copia exacta de obtener_texto en app.py) [cite: 3]
+            // Traemos 'verse' y 'text' para evitar errores de índice
+            Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number = ? AND chapter = ? ORDER BY verse ASC", 
+                new String[]{String.valueOf(libroId), String.valueOf(capituloActual)});
+            
+            // Usamos getColumnIndex para que no importe el orden de las columnas en la DB [cite: 2, 3]
+            int indexTexto = c.getColumnIndex("text");
+            int indexVerso = c.getColumnIndex("verse");
+
+            while (c.moveToNext()) {
+                String numV = c.getString(indexVerso);
+                String txt = c.getString(indexTexto);
+                
+                // Limpieza de etiquetas (Equivalente al re.sub de Python) [cite: 3]
+                txt = txt.replaceAll("<[^>]+>", "").trim();
+                
+                listaVersiculos.add(numV + " " + txt);
+            }
+            c.close();
+
+            adapter = new VersiculoAdapter(listaVersiculos, 18, true);
+            rvVersiculos.setAdapter(adapter);
+            
+        } catch (Exception e) {
+            Toast.makeText(this, "Error en lectura: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void setupNavigation() {
