@@ -13,9 +13,8 @@ public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.View
     private List<String> versiculos;
     private int tamanoTexto;
     private boolean modoNoche;
-    private OnItemClickListener listener; // <--- Importante
+    private OnItemClickListener listener;
 
-    // La pieza que faltaba
     public interface OnItemClickListener {
         void onItemClick(int position);
     }
@@ -39,11 +38,26 @@ public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.View
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        holder.textView.setText(versiculos.get(position));
+        String rawText = versiculos.get(position);
+        
+        // 1. Detección de Colores
+        int colorFondo = Color.TRANSPARENT;
+        if (rawText.contains("##AZUL")) colorFondo = Color.parseColor("#332196F3"); // Azul suave
+        else if (rawText.contains("##AMARILLO")) colorFondo = Color.parseColor("#33FFEB3B"); // Amarillo suave
+        else if (rawText.contains("##VERDE")) colorFondo = Color.parseColor("#334CAF50"); // Verde suave
+        else if (rawText.contains("##MORADO")) colorFondo = Color.parseColor("#339C27B0"); // Morado suave
+        else if (rawText.contains("##ROSADO")) colorFondo = Color.parseColor("#33E91E63"); // Rosado suave
+        
+        holder.itemView.setBackgroundColor(colorFondo);
+
+        // 2. Limpieza visual (Quitamos el código ##COLOR para que el usuario no lo vea)
+        String textoLimpio = rawText.replaceAll("##[A-Z]+", "");
+        
+        holder.textView.setText(textoLimpio);
         holder.textView.setTextSize(tamanoTexto);
         holder.textView.setTextColor(modoNoche ? Color.WHITE : Color.BLACK);
         
-        // Detectar el toque en el versículo
+        // 3. Click Listener
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) listener.onItemClick(position);
         });
