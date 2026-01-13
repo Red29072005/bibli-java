@@ -4,6 +4,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -23,8 +24,8 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView rvVersiculos;
     private VersiculoAdapter adapter;
     private List<String> listaVersiculos = new ArrayList<>();
-    private SQLiteDatabase dbBiblia, dbUser;
-    private String versionActual = "NVI'22.SQLite3"; // Por defecto como en tu .py
+    private SQLiteDatabase dbBiblia;
+    private String versionActual = "NVI'22.SQLite3"; 
     private int libroId = 1, capituloActual = 1;
 
     @Override
@@ -37,24 +38,14 @@ public class MainActivity extends AppCompatActivity {
         
         rvVersiculos = findViewById(R.id.rvVersiculos);
         rvVersiculos.setLayoutManager(new LinearLayoutManager(this));
+        rvVersiculos.setBackgroundColor(Color.BLACK);
 
-        initUserDB();
         setupNavigation();
         abrirBiblia();
     }
 
-    private void initUserDB() {
-        dbUser = openOrCreateDatabase("user_data.db", MODE_PRIVATE, null);
-        dbUser.execSQL("CREATE TABLE IF NOT EXISTS ajustes (clave TEXT PRIMARY KEY, valor TEXT)");
-        
-        Cursor c = dbUser.rawQuery("SELECT valor FROM ajustes WHERE clave='last_ver'", null);
-        if (c.moveToFirst()) versionActual = c.getString(0);
-        c.close();
-    }
-
     private void abrirBiblia() {
         try {
-            // Lógica de _preparar_archivos de tu app.py
             File f = getDatabasePath(versionActual);
             if (!f.exists()) {
                 f.getParentFile().mkdirs();
@@ -68,30 +59,31 @@ public class MainActivity extends AppCompatActivity {
             dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
             render();
         } catch (Exception e) {
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Error DB: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
     private void render() {
         listaVersiculos.clear();
-        
-        // 1. Obtener nombre del libro (Lógica obtener_id_libro en Python)
+        // Obtener nombre largo del libro para el Toolbar
         Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number = ?", new String[]{String.valueOf(libroId)});
-        if (cb.moveToFirst()) getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
+        if (cb.moveToFirst()) {
+            getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
+        }
         cb.close();
 
-        // 2. Obtener texto (Lógica obtener_texto en Python) 
-        Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number = ? AND chapter = ? ORDER BY verse ASC", 
+        // Consulta de versículos idéntica a obtener_texto en app.py 
+        Cursor c = dbBiblia.rawQuery("SELECT text FROM verses WHERE book_number = ? AND chapter = ? ORDER BY verse ASC", 
             new String[]{String.valueOf(libroId), String.valueOf(capituloActual)});
         
         while (c.moveToNext()) {
-            // Limpieza de etiquetas como haces en Python con re.sub
-            String txt = c.getString(1).replaceAll("<[^>]+>", "").trim();
+            // Limpieza de etiquetas HTML/SQLite como en Python 
+            String txt = c.getString(0).replaceAll("<[^>]+>", "").trim();
             listaVersiculos.add(txt);
         }
         c.close();
 
-        adapter = new VersiculoAdapter(listaVersiculos, 18, true); // Dark mode por defecto
+        adapter = new VersiculoAdapter(listaVersiculos, 18, true);
         rvVersiculos.setAdapter(adapter);
     }
 
@@ -108,18 +100,22 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorLibros() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
-        List<String> libros = new ArrayList<>();
+        List<String> nombresLibros = new ArrayList<>();
+        final List<Integer> idsLibros = new ArrayList<>();
         
-        // Usamos la tabla books que está en todas tus BD 
-        Cursor c = dbBiblia.rawQuery("SELECT long_name FROM books ORDER BY book_number", null);
-        while(c.moveToNext()) libros.add(c.getString(0));
+        // Obtenemos book_number y nombre como en el orden_maestro de Python 
+        Cursor c = dbBiblia.rawQuery("SELECT book_number, long_name FROM books ORDER BY book_number", null);
+        while(c.moveToNext()) {
+            idsLibros.add(c.getInt(0));
+            nombresLibros.add(c.getString(1));
+        }
         c.close();
         
-        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, libros));
+        lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombresLibros));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
-            libroId = pos + 1;
+            libroId = idsLibros.get(pos);
             d.dismiss();
-            mostrarSelectorCapitulos();
+            mostrarSelectorCapitulos(); // Salta directamente a elegir capítulo
         });
         d.setContentView(lv);
         d.show();
@@ -150,13 +146,12 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorVersiones() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         String[] nombres = {"NVI", "LBLA", "DHHS", "PDT"};
-        String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"}; // Igual que self.archivos en Python 
+        final String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"}; 
         
         ListView lv = new ListView(this);
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
             versionActual = archivos[pos];
-            dbUser.execSQL("INSERT OR REPLACE INTO ajustes VALUES ('last_ver', ?)", new String[]{versionActual});
             abrirBiblia();
             d.dismiss();
         });
