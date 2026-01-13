@@ -26,6 +26,14 @@ public class MainActivity extends AppCompatActivity {
     private String versionActual = "NVI'22.SQLite3"; 
     private int libroId = 1, capituloActual = 1;
 
+    // --- CONFIGURACIÓN POR VERSIÓN (Mapper) ---
+    private String getLibrosQuery() {
+        if (versionActual.contains("PDT") || versionActual.contains("DHHS")) {
+            return "SELECT book_number, long_name FROM books_all ORDER BY book_number";
+        }
+        return "SELECT book_number, long_name FROM books ORDER BY book_number";
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -37,22 +45,11 @@ public class MainActivity extends AppCompatActivity {
         abrirBiblia();
     }
 
-    // --- LOGICA DE CONSULTAS PERSONALIZADAS POR VERSION ---
-    
-    private String getTablaLibros() {
-        // Aquí especificamos según la versión, tal como pediste
-        if (versionActual.equals("PDT.SQLite3") || versionActual.equals("DHHS'94.SQLite3")) {
-            return "books_all";
-        } else {
-            return "books";
-        }
-    }
-
     private void abrirBiblia() {
         try {
             if (dbBiblia != null) dbBiblia.close();
             File f = getDatabasePath(versionActual);
-            if (!f.exists()) {
+            if (!f.exists() || f.length() == 0) {
                 f.getParentFile().mkdirs();
                 InputStream is = getAssets().open(versionActual);
                 FileOutputStream os = new FileOutputStream(f);
@@ -64,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
             dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
             render();
         } catch (Exception e) {
-            Toast.makeText(this, "Error al abrir " + versionActual, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error DB: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -72,15 +69,15 @@ public class MainActivity extends AppCompatActivity {
         if (dbBiblia == null) return;
         listaVersiculos.clear();
         try {
-            // 1. Obtener nombre del libro usando la tabla específica
-            String tabla = getTablaLibros();
-            Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM " + tabla + " WHERE book_number = " + libroId, null);
+            // 1. Título dinámico (Busca según la tabla que corresponda)
+            String tablaLibros = versionActual.contains("PDT") || versionActual.contains("DHHS") ? "books_all" : "books";
+            Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM " + tablaLibros + " WHERE book_number = " + libroId, null);
             if (cb.moveToFirst()) {
                 if (getSupportActionBar() != null) getSupportActionBar().setTitle(cb.getString(0) + " " + capituloActual);
             }
             cb.close();
 
-            // 2. Cargar Versículos
+            // 2. Cargar Versículos (book_number es NUMERIC en todas según tu reporte)
             Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number = " + libroId + " AND chapter = " + capituloActual + " ORDER BY verse ASC", null);
             
             while (c.moveToNext()) {
@@ -92,8 +89,12 @@ public class MainActivity extends AppCompatActivity {
 
             adapter = new VersiculoAdapter(listaVersiculos, 18, true);
             rvVersiculos.setAdapter(adapter);
+            
+            if (listaVersiculos.isEmpty()) {
+                Toast.makeText(this, "No hay versículos en este capítulo", Toast.LENGTH_SHORT).show();
+            }
         } catch (Exception e) {
-            Toast.makeText(this, "Error de lectura en " + versionActual, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Error lectura: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -101,19 +102,22 @@ public class MainActivity extends AppCompatActivity {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
         List<String> nombres = new ArrayList<>();
-        
+        final List<Integer> ids = new ArrayList<>();
+
         try {
-            String tabla = getTablaLibros();
-            Cursor c = dbBiblia.rawQuery("SELECT long_name FROM " + tabla + " ORDER BY book_number", null);
-            while(c.moveToNext()) nombres.add(c.getString(0));
+            Cursor c = dbBiblia.rawQuery(getLibrosQuery(), null);
+            while (c.moveToNext()) {
+                ids.add(c.getInt(0));
+                nombres.add(c.getString(1));
+            }
             c.close();
         } catch (Exception e) {
-            nombres.add("Error al cargar lista");
+            Toast.makeText(this, "Error cargando libros", Toast.LENGTH_SHORT).show();
         }
 
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
-            libroId = pos + 1;
+            libroId = ids.get(pos); // ID REAL de la base de datos, no la posición de la lista
             d.dismiss();
             mostrarSelectorCapitulos();
         });
@@ -121,20 +125,20 @@ public class MainActivity extends AppCompatActivity {
         d.show();
     }
 
-    // --- EL RESTO DE MÉTODOS SE MANTIENEN IGUAL ---
-
     private void mostrarSelectorCapitulos() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         ListView lv = new ListView(this);
         List<String> caps = new ArrayList<>();
         try {
+            // Buscamos el máximo capítulo para ese libro específico
             Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number = " + libroId, null);
             int max = (c.moveToFirst()) ? c.getInt(0) : 1;
             c.close();
-            for(int i=1; i<=max; i++) caps.add("Capítulo " + i);
+            for (int i = 1; i <= max; i++) caps.add("Capítulo " + i);
         } catch (Exception e) {
-            for(int i=1; i<=50; i++) caps.add("Capítulo " + i);
+            for (int i = 1; i <= 50; i++) caps.add("Capítulo " + i);
         }
+
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, caps));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
             capituloActual = pos + 1;
@@ -158,11 +162,13 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorVersiones() {
         BottomSheetDialog d = new BottomSheetDialog(this);
         String[] nombres = {"NVI", "LBLA", "DHHS", "PDT"};
-        String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"};
+        final String[] archivos = {"NVI'22.SQLite3", "LBLA.SQLite3", "DHHS'94.SQLite3", "PDT.SQLite3"};
         ListView lv = new ListView(this);
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
         lv.setOnItemClickListener((ad, vi, pos, id) -> {
             versionActual = archivos[pos];
+            libroId = 1; // Resetear al primer libro para evitar errores entre versiones
+            capituloActual = 1;
             abrirBiblia();
             d.dismiss();
         });
