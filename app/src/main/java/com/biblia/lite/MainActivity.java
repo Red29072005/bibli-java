@@ -19,7 +19,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -81,7 +80,6 @@ public class MainActivity extends AppCompatActivity {
             if (!f.exists()) copiarAsset(versionActual, f);
             dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
 
-            // Cargar base de notas
             String fileNotas = versionActual.replace(".SQLite3", ".commentaries.SQLite3");
             File fN = new File(getFilesDir(), fileNotas);
             if (!fN.exists()) try { copiarAsset(fileNotas, fN); } catch(Exception e){}
@@ -94,13 +92,13 @@ public class MainActivity extends AppCompatActivity {
 
     private void aplicarTema() {
         int fondo = modoOscuro ? Color.BLACK : Color.WHITE;
-        int texto = modoOscuro ? Color.WHITE : Color.BLACK;
+        int texto = modoOscuro ? Color.parseColor("#CCCCCC") : Color.parseColor("#444444"); // Gris suave
         int barraControl = modoOscuro ? Color.parseColor("#1A1A1A") : Color.parseColor("#F5F5F5");
         int azul = Color.parseColor("#2196F3");
 
         findViewById(R.id.rootLayout).setBackgroundColor(fondo);
         findViewById(R.id.control_bar).setBackgroundColor(barraControl);
-        txtNavAbrev.setTextColor(texto);
+        txtNavAbrev.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
 
         ((Button)findViewById(R.id.btnAnterior)).setTextColor(azul);
         ((Button)findViewById(R.id.btnSiguiente)).setTextColor(azul);
@@ -122,12 +120,14 @@ public class MainActivity extends AppCompatActivity {
             int nV = c.getInt(0);
             String raw = c.getString(1);
 
-            String t = raw.replaceAll("<[^>]+>", "")
+            // Lógica de saltos de línea (como en app.py)
+            // Reemplazamos <t/> o <pb/> por un salto simple, no doble.
+            String procesado = raw.replace("<t/>", "\n").replace("<pb/>", "\n");
+            
+            String t = procesado.replaceAll("<[^>]+>", "")
                          .replaceAll("[\\u24D0-\\u24E9\\u24B6-\\u24CF\\u00AE\\u00A9]", "")
                          .replaceAll("\\[\\d+\\]", "")
                          .replaceAll("\\s+", " ").trim();
-
-            String salto = (raw.contains("<pb") || raw.contains("<t")) ? "\n\n" : "";
 
             String notaIcon = "";
             if (dbNotas != null) {
@@ -137,7 +137,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             String color = obtenerColorUser(nV);
-            listaVersiculos.add(salto + nV + " " + t + notaIcon + (color.isEmpty() ? "" : " ##" + color));
+            // Eliminamos el salto inicial para evitar separación excesiva entre versículos
+            listaVersiculos.add(nV + " " + t + notaIcon + (color.isEmpty() ? "" : " ##" + color));
         }
         c.close();
 
@@ -263,22 +264,30 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarSelectorColoresPorPosicion(int pos) {
         String line = listaVersiculos.get(pos).replace("\n", "").trim();
         int vNum = Integer.parseInt(line.split(" ")[0].replaceAll("[^0-9]", ""));
+        
         BottomSheetDialog d = new BottomSheetDialog(this);
+        HorizontalScrollView scroll = new HorizontalScrollView(this);
         LinearLayout l = new LinearLayout(this);
         l.setPadding(50, 80, 50, 80); l.setGravity(Gravity.CENTER);
-        int[] colors = {Color.YELLOW, Color.CYAN, Color.GREEN, Color.LTGRAY};
-        String[] names = {"AMARILLO", "AZUL", "VERDE", "BORRAR"};
+        
+        // Colores con transparencia (Alpha 120 / 47%) para que se vea la letra
+        int[] colors = {0x78FFFF00, 0x7800FFFF, 0x7800FF00, 0x78FF00FF, Color.LTGRAY};
+        String[] names = {"AMARILLO", "AZUL", "VERDE", "ROSA", "BORRAR"};
+        
         for (int i = 0; i < colors.length; i++) {
             final String name = names[i];
             View circle = new View(this);
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(130, 130); p.setMargins(25, 0, 25, 0);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(110, 110); p.setMargins(20, 0, 20, 0);
             circle.setLayoutParams(p);
-            GradientDrawable gd = new GradientDrawable(); gd.setShape(GradientDrawable.OVAL); gd.setColor(colors[i]);
+            GradientDrawable gd = new GradientDrawable(); 
+            gd.setShape(GradientDrawable.OVAL); 
+            gd.setColor(colors[i]);
             circle.setBackground(gd);
             circle.setOnClickListener(v -> { guardarColor(vNum, name); d.dismiss(); render(); });
             l.addView(circle);
         }
-        d.setContentView(l); d.show();
+        scroll.addView(l);
+        d.setContentView(scroll); d.show();
     }
 
     private void mostrarSelectorLibros() {
