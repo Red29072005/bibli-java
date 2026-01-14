@@ -52,6 +52,16 @@
             android:backgroundTint="@android:color/transparent"
             android:textColor="#FFFFFF"
             style="@style/Widget.MaterialComponents.Button.TextButton"/>
+
+        <Button
+            android:id="@+id/btnAjustes"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:text="⚙"
+            android:textSize="20sp"
+            android:backgroundTint="@android:color/transparent"
+            android:textColor="#FFFFFF"
+            style="@style/Widget.MaterialComponents.Button.TextButton"/>
     </LinearLayout>
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
