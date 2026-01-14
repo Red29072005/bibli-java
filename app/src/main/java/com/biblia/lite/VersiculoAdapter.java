@@ -2,11 +2,6 @@ package com.biblia.lite;
 
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.text.Spannable;
-import android.text.SpannableString;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.RelativeSizeSpan;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -16,76 +11,79 @@ import java.util.List;
 
 public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.ViewHolder> {
     private List<String> versiculos;
-    private int tamanoTexto;
-    private boolean modoNoche;
-    private String tipoFuente;
-    private OnItemClickListener clickListener;
+    private int tamano;
+    private boolean modoOscuro;
+    private String fuente;
+    private OnVersiculoClickListener listener;
 
-    public interface OnItemClickListener { void onItemClick(int position); }
-    public void setOnItemClickListener(OnItemClickListener listener) { this.clickListener = listener; }
+    public interface OnVersiculoClickListener {
+        void onShortClick(int position);
+        void onLongClick(int position);
+    }
 
-    public VersiculoAdapter(List<String> versiculos, int tamanoTexto, boolean modoNoche, String tipoFuente) {
+    public VersiculoAdapter(List<String> versiculos, int tamano, boolean modoOscuro, String fuente, OnVersiculoClickListener listener) {
         this.versiculos = versiculos;
-        this.tamanoTexto = tamanoTexto;
-        this.modoNoche = modoNoche;
-        this.tipoFuente = tipoFuente;
+        this.tamano = tamano;
+        this.modoOscuro = modoOscuro;
+        this.fuente = fuente;
+        this.listener = listener;
     }
 
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext()).inflate(android.R.layout.simple_list_item_1, parent, false);
-        return new ViewHolder(v);
+        TextView tv = new TextView(parent.getContext());
+        tv.setPadding(30, 20, 30, 20);
+        tv.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return new ViewHolder(tv);
     }
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        String rawText = versiculos.get(position);
-        
-        // 1. Manejo de Colores de resaltado
-        int colorFondo = Color.TRANSPARENT;
-        if (rawText.contains("##AZUL")) colorFondo = Color.parseColor("#442196F3");
-        else if (rawText.contains("##AMARILLO")) colorFondo = Color.parseColor("#44FFEB3B");
-        else if (rawText.contains("##VERDE")) colorFondo = Color.parseColor("#444CAF50");
-        holder.itemView.setBackgroundColor(colorFondo);
+        String raw = versiculos.get(position);
+        String textoMostrar = raw;
+        String colorResaltado = "";
 
-        // 2. Formatear Versículo (Número gris y pequeño)
-        String textoLimpio = rawText.replaceAll("##[A-Z]+", "").trim();
-        
-        // Buscamos dónde termina el número (primer espacio)
-        int primerEspacio = textoLimpio.indexOf(" ");
-        // Si el texto empieza con salto de línea, buscamos el número después
-        if (textoLimpio.startsWith("\n")) {
-            primerEspacio = textoLimpio.indexOf(" ", textoLimpio.lastIndexOf("\n"));
+        if (raw.contains(" ##")) {
+            String[] parts = raw.split(" ##");
+            textoMostrar = parts[0];
+            colorResaltado = parts[1];
         }
 
-        SpannableString spannable = new SpannableString(textoLimpio);
-        if (primerEspacio > 0) {
-            int inicioNum = textoLimpio.startsWith("\n") ? textoLimpio.lastIndexOf("\n") + 1 : 0;
-            // Color gris clarito al número
-            spannable.setSpan(new ForegroundColorSpan(Color.GRAY), inicioNum, primerEspacio, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            // Tamaño un poco más pequeño al número
-            spannable.setSpan(new RelativeSizeSpan(0.8f), inicioNum, primerEspacio, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        holder.tv.setText(textoMostrar);
+        holder.tv.setTextSize(tamano);
+        holder.tv.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
+
+        // Aplicar Color de Resaltado
+        if (!colorResaltado.isEmpty()) {
+            int alpha = 120;
+            if (colorResaltado.equals("AMARILLO")) holder.tv.setBackgroundColor(Color.argb(alpha, 255, 255, 0));
+            else if (colorResaltado.equals("AZUL")) holder.tv.setBackgroundColor(Color.argb(alpha, 0, 200, 255));
+            else if (colorResaltado.equals("VERDE")) holder.tv.setBackgroundColor(Color.argb(alpha, 0, 255, 0));
+        } else {
+            holder.tv.setBackgroundColor(Color.TRANSPARENT);
         }
 
-        holder.textView.setText(spannable);
-        holder.textView.setTextSize(tamanoTexto);
-        holder.textView.setTextColor(modoNoche ? Color.WHITE : Color.BLACK);
-        holder.textView.setLineSpacing(0, 1.3f); // Interlineado cómodo
+        // Tipo de Fuente
+        if (fuente.equals("SERIF")) holder.tv.setTypeface(Typeface.SERIF);
+        else if (fuente.equals("MONO")) holder.tv.setTypeface(Typeface.MONOSPACE);
+        else holder.tv.setTypeface(Typeface.SANS_SERIF);
 
-        // Fuente
-        if (tipoFuente.equals("SERIF")) holder.textView.setTypeface(Typeface.SERIF);
-        else if (tipoFuente.equals("MONO")) holder.textView.setTypeface(Typeface.MONOSPACE);
-        else holder.textView.setTypeface(Typeface.SANS_SERIF);
-
-        holder.itemView.setOnClickListener(v -> { if (clickListener != null) clickListener.onItemClick(position); });
+        // CLIC CORTO (Notas)
+        holder.tv.setOnClickListener(v -> listener.onShortClick(position));
+        
+        // CLIC LARGO (Marcado)
+        holder.tv.setOnLongClickListener(v -> {
+            listener.onLongClick(position);
+            return true;
+        });
     }
 
     @Override
     public int getItemCount() { return versiculos.size(); }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView textView;
-        public ViewHolder(@NonNull View v) { super(v); textView = v.findViewById(android.R.id.text1); }
+        TextView tv;
+        public ViewHolder(View v) { super(v); tv = (TextView) v; }
     }
 }

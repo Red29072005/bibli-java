@@ -3,8 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#000000">
+    android:layout_height="match_parent">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvVersiculos"
@@ -20,16 +19,16 @@
         android:background="#1A1A1A"
         android:orientation="horizontal"
         android:gravity="center"
-        android:padding="5dp">
+        android:padding="8dp">
 
         <Button
             android:id="@+id/btnAnterior"
-            android:layout_width="60dp"
+            android:layout_width="80dp"
             android:layout_height="wrap_content"
             android:text="⟪"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:backgroundTint="@android:color/transparent"
-            android:textColor="#FFFFFF"
+            android:textColor="#2196F3"
             style="@style/Widget.MaterialComponents.Button.TextButton"/>
 
         <TextView
@@ -37,30 +36,19 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="GÉN 1"
             android:textColor="#BBBBBB"
-            android:textSize="16sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:gravity="center" />
 
         <Button
             android:id="@+id/btnSiguiente"
-            android:layout_width="60dp"
+            android:layout_width="80dp"
             android:layout_height="wrap_content"
             android:text="⟫"
-            android:textSize="22sp"
+            android:textSize="24sp"
             android:backgroundTint="@android:color/transparent"
-            android:textColor="#FFFFFF"
-            style="@style/Widget.MaterialComponents.Button.TextButton"/>
-
-        <Button
-            android:id="@+id/btnAjustes"
-            android:layout_width="60dp"
-            android:layout_height="wrap_content"
-            android:text="⚙"
-            android:textSize="20sp"
-            android:backgroundTint="@android:color/transparent"
-            android:textColor="#FFFFFF"
+            android:textColor="#2196F3"
             style="@style/Widget.MaterialComponents.Button.TextButton"/>
     </LinearLayout>
 
@@ -69,6 +57,5 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:background="#000000"
         app:menu="@menu/bottom_nav_menu" />
 </RelativeLayout>

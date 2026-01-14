@@ -5,17 +5,11 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.HorizontalScrollView;
-import android.widget.LinearLayout;
-import android.widget.ListView;
-import android.widget.SeekBar;
-import android.widget.TextView;
-import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
+import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -25,31 +19,30 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private RecyclerView rvVersiculos;
-    private VersiculoAdapter adapter;
     private List<String> listaVersiculos = new ArrayList<>();
-    private SQLiteDatabase dbBiblia, dbNotas;
-    private String versionActual = "NVI'22.SQLite3"; 
-    private int libroId = 1, capituloActual = 1, tamanoLetra = 18;
-    private String tipoFuente = "SANS";
-    private boolean modoOscuro = true;
-    private TextView txtNavAbrev;
+    private SQLiteDatabase dbBiblia, dbNotas, dbUser;
+    private String versionActual, tipoFuente;
+    private int libroId, capituloActual, tamanoLetra;
+    private boolean modoOscuro;
     private SharedPreferences prefs;
+    private TextView txtNavAbrev;
 
     private final String[] ORDEN_LIBROS = {
-        "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio", "Josué", "Jueces", "Job",
-        "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes", "Salmo", "Proverbios", 
-        "Eclesiastés", "Cantares", "1 Crónicas", "2 Crónicas", "Joel", "Amós", "Oseas", 
-        "Miqueas", "Nahúm", "Jonás", "Habacuc", "Isaías", "Sofonías", "Jeremías", 
-        "Lamentaciones", "Abdías", "Daniel", "Ezequiel", "Ester", "Hageo", "Zacarías", 
-        "Malaquías", "Esdras", "Nehemías", "Mateo", "Marcos", "Lucas", "Juan", "Hechos", 
-        "Romanos", "1 Corintios", "2 Corintios", "Gálatas", "Efesios", "Filipenses", 
-        "Colosenses", "1 Tesalonicenses", "2 Tesalonicenses", "1 Timoteo", "2 Timoteo", 
-        "Tito", "Filemón", "Hebreos", "Santiago", "1 Pedro", "2 Pedro", "1 Juan", 
-        "2 Juan", "3 Juan", "Judas", "Apocalipsis"
+            "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio", "Josué", "Jueces", "Job",
+            "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes", "Salmo", "Proverbios",
+            "Eclesiastés", "Cantares", "1 Crónicas", "2 Crónicas", "Joel", "Amós", "Oseas",
+            "Miqueas", "Nahúm", "Jonás", "Habacuc", "Isaías", "Sofonías", "Jeremías",
+            "Lamentaciones", "Abdías", "Daniel", "Ezequiel", "Ester", "Hageo", "Zacarías",
+            "Malaquías", "Esdras", "Nehemías", "Mateo", "Marcos", "Lucas", "Juan", "Hechos",
+            "Romanos", "1 Corintios", "2 Corintios", "Gálatas", "Efesios", "Filipenses",
+            "Colosenses", "1 Tesalonicenses", "2 Tesalonicenses", "1 Timoteo", "2 Timoteo",
+            "Tito", "Filemón", "Hebreos", "Santiago", "1 Pedro", "2 Pedro", "1 Juan",
+            "2 Juan", "3 Juan", "Judas", "Apocalipsis"
     };
 
     @Override
@@ -58,11 +51,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         prefs = getSharedPreferences("BibliaPrefs", MODE_PRIVATE);
-        versionActual = prefs.getString("last_version", "NVI'22.SQLite3");
-        libroId = prefs.getInt("last_book", 1);
-        capituloActual = prefs.getInt("last_cap", 1);
-        tamanoLetra = prefs.getInt("font_size", 18);
-        modoOscuro = prefs.getBoolean("dark_mode", true);
+        cargarAjustes();
 
         rvVersiculos = findViewById(R.id.rvVersiculos);
         txtNavAbrev = findViewById(R.id.txtNavAbrev);
@@ -70,56 +59,167 @@ public class MainActivity extends AppCompatActivity {
 
         findViewById(R.id.btnAnterior).setOnClickListener(v -> cambiarCapitulo(-1));
         findViewById(R.id.btnSiguiente).setOnClickListener(v -> cambiarCapitulo(1));
-        findViewById(R.id.btnAjustes).setOnClickListener(v -> mostrarAjustes());
 
-        abrirBiblia();
         setupNavigation();
-        aplicarTema();
+        abrirBasesDeDatos();
+        aplicarTema(); 
+        render();
+    }
+
+    private void cargarAjustes() {
+        versionActual = prefs.getString("last_version", "NVI'22.SQLite3");
+        libroId = prefs.getInt("last_book", 1);
+        capituloActual = prefs.getInt("last_cap", 1);
+        tamanoLetra = prefs.getInt("font_size", 18);
+        tipoFuente = prefs.getString("font_type", "SANS");
+        modoOscuro = prefs.getBoolean("dark_mode", true);
+    }
+
+    private void abrirBasesDeDatos() {
+        try {
+            File f = new File(getFilesDir(), versionActual);
+            if (!f.exists()) copiarAsset(versionActual, f);
+            dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+
+            // Cargar base de notas
+            String fileNotas = versionActual.replace(".SQLite3", ".commentaries.SQLite3");
+            File fN = new File(getFilesDir(), fileNotas);
+            if (!fN.exists()) try { copiarAsset(fileNotas, fN); } catch(Exception e){}
+            dbNotas = fN.exists() ? SQLiteDatabase.openDatabase(fN.getPath(), null, SQLiteDatabase.OPEN_READONLY) : null;
+
+            dbUser = SQLiteDatabase.openOrCreateDatabase(new File(getFilesDir(), "user_marks.db").getPath(), null);
+            dbUser.execSQL("CREATE TABLE IF NOT EXISTS marcadores (l INTEGER, c INTEGER, v INTEGER, color TEXT, PRIMARY KEY(l,c,v))");
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    private void aplicarTema() {
+        int fondo = modoOscuro ? Color.BLACK : Color.WHITE;
+        int texto = modoOscuro ? Color.WHITE : Color.BLACK;
+        int barraControl = modoOscuro ? Color.parseColor("#1A1A1A") : Color.parseColor("#F5F5F5");
+        int azul = Color.parseColor("#2196F3");
+
+        findViewById(R.id.rootLayout).setBackgroundColor(fondo);
+        findViewById(R.id.control_bar).setBackgroundColor(barraControl);
+        txtNavAbrev.setTextColor(texto);
+
+        ((Button)findViewById(R.id.btnAnterior)).setTextColor(azul);
+        ((Button)findViewById(R.id.btnSiguiente)).setTextColor(azul);
+
+        BottomNavigationView nav = findViewById(R.id.bottom_navigation);
+        nav.setBackgroundColor(barraControl);
+        int colorIconos = modoOscuro ? Color.WHITE : Color.BLACK;
+        nav.setItemIconTintList(android.content.res.ColorStateList.valueOf(colorIconos));
+        nav.setItemTextColor(android.content.res.ColorStateList.valueOf(colorIconos));
     }
 
     private void render() {
         if (dbBiblia == null) return;
         listaVersiculos.clear();
-        try {
-            txtNavAbrev.setText(obtenerAbrev(libroId) + " " + capituloActual);
+        txtNavAbrev.setText(obtenerAbrev(libroId) + " " + capituloActual);
 
-            Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number=" + libroId + " AND chapter=" + capituloActual + " ORDER BY verse ASC", null);
-            while (c.moveToNext()) {
-                int nV = c.getInt(0);
-                String raw = c.getString(1);
-                
-                // DETECCIÓN DE SALTOS (Párrafos, Títulos de Salmos, Diálogos)
-                String salto = "";
-                if (raw.contains("<pb") || raw.contains("<p") || raw.contains("<d") || raw.contains("<t") || raw.contains("<s")) {
-                    salto = "\n\n"; // Doble salto para títulos y párrafos nuevos
-                } else if (raw.contains("<q") || raw.contains("—")) {
-                    salto = "\n";   // Salto simple para poesía y diálogos
-                }
+        Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number=" + libroId + " AND chapter=" + capituloActual + " ORDER BY verse ASC", null);
+        while (c.moveToNext()) {
+            int nV = c.getInt(0);
+            String raw = c.getString(1);
 
-                String txt = raw.replaceAll("<[^>]+>", "").replaceAll("\\[\\d+\\]", "").trim();
-                
-                // Consultar color guardado en DB de notas
-                String col = obtenerColor(nV);
-                listaVersiculos.add(salto + nV + " " + txt + (col.isEmpty() ? "" : " ##"+col));
+            String t = raw.replaceAll("<[^>]+>", "")
+                         .replaceAll("[\\u24D0-\\u24E9\\u24B6-\\u24CF\\u00AE\\u00A9]", "")
+                         .replaceAll("\\[\\d+\\]", "")
+                         .replaceAll("\\s+", " ").trim();
+
+            String salto = (raw.contains("<pb") || raw.contains("<t")) ? "\n\n" : "";
+
+            String notaIcon = "";
+            if (dbNotas != null) {
+                Cursor cN = dbNotas.rawQuery("SELECT text FROM commentaries WHERE book_number="+libroId+" AND chapter_number_from="+capituloActual+" AND verse_number_from="+nV, null);
+                if (cN.moveToFirst()) notaIcon = " ⓘ";
+                cN.close();
             }
-            c.close();
 
-            adapter = new VersiculoAdapter(listaVersiculos, tamanoLetra, modoOscuro, tipoFuente);
-            adapter.setOnItemClickListener(pos -> {
-                String line = listaVersiculos.get(pos).trim();
-                int vNum = Integer.parseInt(line.split(" ")[0]);
-                mostrarSelectorColores(vNum);
-            });
-            rvVersiculos.setAdapter(adapter);
-        } catch (Exception e) { e.printStackTrace(); }
+            String color = obtenerColorUser(nV);
+            listaVersiculos.add(salto + nV + " " + t + notaIcon + (color.isEmpty() ? "" : " ##" + color));
+        }
+        c.close();
+
+        VersiculoAdapter adapter = new VersiculoAdapter(listaVersiculos, tamanoLetra, modoOscuro, tipoFuente, new VersiculoAdapter.OnVersiculoClickListener() {
+            @Override public void onShortClick(int position) { verNota(position); }
+            @Override public void onLongClick(int position) { mostrarSelectorColoresPorPosicion(position); }
+        });
+        rvVersiculos.setAdapter(adapter);
     }
 
-    private String obtenerAbrev(int id) {
-        Cursor c = dbBiblia.rawQuery("SELECT short_name FROM books WHERE book_number=" + id, null);
-        String res = "LIB";
-        if (c.moveToFirst()) res = c.getString(0).toUpperCase();
-        c.close();
-        return res;
+    private void verNota(int pos) {
+        if (dbNotas == null) return;
+        try {
+            String line = listaVersiculos.get(pos).replace("\n", "").trim();
+            int vNum = Integer.parseInt(line.split(" ")[0].replaceAll("[^0-9]", ""));
+
+            Cursor c = dbNotas.rawQuery("SELECT text FROM commentaries WHERE book_number="+libroId+" AND chapter_number_from="+capituloActual+" AND verse_number_from="+vNum, null);
+            if (c.moveToFirst()) {
+                BottomSheetDialog d = new BottomSheetDialog(this);
+                TextView tv = new TextView(this);
+                tv.setText(c.getString(0).replaceAll("<[^>]+>", "").trim());
+                tv.setPadding(60, 60, 60, 60);
+                tv.setTextSize(17);
+                tv.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
+                ScrollView s = new ScrollView(this); s.addView(tv);
+                s.setBackgroundColor(modoOscuro ? Color.parseColor("#1A1A1A") : Color.WHITE);
+                d.setContentView(s); d.show();
+            }
+            c.close();
+        } catch (Exception e) {}
+    }
+
+    private void mostrarAjustes() {
+        BottomSheetDialog d = new BottomSheetDialog(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(60, 50, 60, 70);
+        root.setBackgroundColor(modoOscuro ? Color.parseColor("#121212") : Color.WHITE);
+
+        CheckBox cb = new CheckBox(this);
+        cb.setText("Modo Oscuro");
+        cb.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
+        cb.setChecked(modoOscuro);
+        cb.setOnCheckedChangeListener((v, isChecked) -> {
+            modoOscuro = isChecked;
+            prefs.edit().putBoolean("dark_mode", isChecked).apply();
+            aplicarTema(); render(); d.dismiss();
+        });
+
+        TextView tSize = new TextView(this);
+        tSize.setText("\nTamaño de letra: " + tamanoLetra);
+        tSize.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
+        SeekBar sb = new SeekBar(this);
+        sb.setMax(20);
+        sb.setProgress(tamanoLetra - 12);
+        sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(SeekBar s, int p, boolean b) {
+                tamanoLetra = p + 12;
+                tSize.setText("\nTamaño de letra: " + tamanoLetra);
+                prefs.edit().putInt("font_size", tamanoLetra).apply();
+                render();
+            }
+            public void onStartTrackingTouch(SeekBar s) {}
+            public void onStopTrackingTouch(SeekBar s) {}
+        });
+
+        root.addView(cb);
+        root.addView(tSize);
+        root.addView(sb);
+        d.setContentView(root);
+        d.show();
+    }
+
+    private void setupNavigation() {
+        BottomNavigationView nav = findViewById(R.id.bottom_navigation);
+        nav.setOnItemSelectedListener(item -> {
+            int id = item.getItemId();
+            if (id == R.id.nav_books) mostrarSelectorLibros();
+            else if (id == R.id.nav_versions) mostrarSelectorVersiones();
+            else if (id == R.id.nav_settings) mostrarAjustes();
+            return true;
+        });
     }
 
     private void cambiarCapitulo(int delta) {
@@ -135,69 +235,50 @@ public class MainActivity extends AppCompatActivity {
         c.close();
     }
 
-    private void abrirBiblia() {
-        try {
-            File f = new File(getFilesDir(), versionActual);
-            if (!f.exists()) {
-                InputStream is = getAssets().open(versionActual);
-                FileOutputStream os = new FileOutputStream(f);
-                byte[] b = new byte[1024]; int l;
-                while((l=is.read(b))>0) os.write(b,0,l);
-                os.close(); is.close();
-            }
-            dbBiblia = SQLiteDatabase.openDatabase(f.getPath(), null, SQLiteDatabase.OPEN_READONLY);
-            
-            File fN = new File(getFilesDir(), "user_notes.db");
-            dbNotas = SQLiteDatabase.openOrCreateDatabase(fN.getPath(), null);
-            dbNotas.execSQL("CREATE TABLE IF NOT EXISTS marcadores (libro INTEGER, cap INTEGER, ver INTEGER, color TEXT, PRIMARY KEY(libro, cap, ver))");
-            
-            render();
-        } catch (Exception e) { e.printStackTrace(); }
-    }
-
-    private String obtenerColor(int v) {
-        Cursor c = dbNotas.rawQuery("SELECT color FROM marcadores WHERE libro="+libroId+" AND cap="+capituloActual+" AND ver="+v, null);
-        String res = (c.moveToFirst()) ? c.getString(0) : "";
-        c.close();
-        return res;
+    private String obtenerAbrev(int id) {
+        Cursor c = dbBiblia.rawQuery("SELECT short_name FROM books WHERE book_number=" + id, null);
+        String res = c.moveToFirst() ? c.getString(0).toUpperCase() : "LIB";
+        c.close(); return res;
     }
 
     private void guardarColor(int v, String col) {
-        if (col.equals("BORRAR")) {
-            dbNotas.execSQL("DELETE FROM marcadores WHERE libro="+libroId+" AND cap="+capituloActual+" AND ver="+v);
-        } else {
-            dbNotas.execSQL("INSERT OR REPLACE INTO marcadores VALUES ("+libroId+","+capituloActual+","+v+",'"+col+"')");
-        }
-        render();
+        if (col.equals("BORRAR")) dbUser.execSQL("DELETE FROM marcadores WHERE l="+libroId+" AND c="+capituloActual+" AND v="+v);
+        else dbUser.execSQL("INSERT OR REPLACE INTO marcadores VALUES ("+libroId+","+capituloActual+","+v+",'"+col+"')");
     }
 
-    private void mostrarSelectorColores(int vNum) {
+    private String obtenerColorUser(int v) {
+        Cursor c = dbUser.rawQuery("SELECT color FROM marcadores WHERE l="+libroId+" AND c="+capituloActual+" AND v="+v, null);
+        String res = c.moveToFirst() ? c.getString(0) : "";
+        c.close(); return res;
+    }
+
+    private void copiarAsset(String name, File dest) throws Exception {
+        InputStream is = getAssets().open(name);
+        FileOutputStream os = new FileOutputStream(dest);
+        byte[] b = new byte[2048]; int l;
+        while((l=is.read(b))>0) os.write(b,0,l);
+        os.close(); is.close();
+    }
+
+    private void mostrarSelectorColoresPorPosicion(int pos) {
+        String line = listaVersiculos.get(pos).replace("\n", "").trim();
+        int vNum = Integer.parseInt(line.split(" ")[0].replaceAll("[^0-9]", ""));
         BottomSheetDialog d = new BottomSheetDialog(this);
-        LinearLayout layout = new LinearLayout(this);
-        layout.setPadding(40, 60, 40, 60);
-        layout.setGravity(android.view.Gravity.CENTER);
-        
-        String[] colors = {"AMARILLO", "AZUL", "VERDE", "BORRAR"};
-        int[] codes = {Color.YELLOW, Color.CYAN, Color.GREEN, Color.GRAY};
-
+        LinearLayout l = new LinearLayout(this);
+        l.setPadding(50, 80, 50, 80); l.setGravity(Gravity.CENTER);
+        int[] colors = {Color.YELLOW, Color.CYAN, Color.GREEN, Color.LTGRAY};
+        String[] names = {"AMARILLO", "AZUL", "VERDE", "BORRAR"};
         for (int i = 0; i < colors.length; i++) {
-            final String name = colors[i];
-            Button b = new Button(this);
-            b.setText(name);
-            b.setOnClickListener(v -> { guardarColor(vNum, name); d.dismiss(); });
-            layout.addView(b);
+            final String name = names[i];
+            View circle = new View(this);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(130, 130); p.setMargins(25, 0, 25, 0);
+            circle.setLayoutParams(p);
+            GradientDrawable gd = new GradientDrawable(); gd.setShape(GradientDrawable.OVAL); gd.setColor(colors[i]);
+            circle.setBackground(gd);
+            circle.setOnClickListener(v -> { guardarColor(vNum, name); d.dismiss(); render(); });
+            l.addView(circle);
         }
-        d.setContentView(layout);
-        d.show();
-    }
-
-    private void setupNavigation() {
-        BottomNavigationView nav = findViewById(R.id.bottom_navigation);
-        nav.setOnItemSelectedListener(item -> {
-            if (item.getItemId() == R.id.nav_books) mostrarSelectorLibros();
-            else mostrarSelectorVersiones();
-            return true;
-        });
+        d.setContentView(l); d.show();
     }
 
     private void mostrarSelectorLibros() {
@@ -205,25 +286,18 @@ public class MainActivity extends AppCompatActivity {
         ListView lv = new ListView(this);
         List<String> nombres = new ArrayList<>();
         final List<Integer> ids = new ArrayList<>();
-        
         for (String lib : ORDEN_LIBROS) {
             Cursor c = dbBiblia.rawQuery("SELECT book_number, long_name FROM books WHERE long_name LIKE '%"+lib+"%' LIMIT 1", null);
-            if (c.moveToFirst()) {
-                ids.add(c.getInt(0));
-                nombres.add(c.getString(1));
-            }
+            if (c.moveToFirst()) { ids.add(c.getInt(0)); nombres.add(c.getString(1)); }
             c.close();
         }
-        
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, nombres));
         lv.setOnItemClickListener((a, v, p, id) -> {
-            libroId = ids.get(p);
-            capituloActual = 1;
-            d.dismiss();
-            mostrarSelectorCapitulos();
+            libroId = ids.get(p); capituloActual = 1;
+            prefs.edit().putInt("last_book", libroId).putInt("last_cap", 1).apply();
+            d.dismiss(); mostrarSelectorCapitulos();
         });
-        d.setContentView(lv);
-        d.show();
+        d.setContentView(lv); d.show();
     }
 
     private void mostrarSelectorCapitulos() {
@@ -231,19 +305,15 @@ public class MainActivity extends AppCompatActivity {
         ListView lv = new ListView(this);
         Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number="+libroId, null);
         int max = (c.moveToFirst()) ? c.getInt(0) : 1; c.close();
-        
         List<String> caps = new ArrayList<>();
         for(int i=1; i<=max; i++) caps.add("Capítulo " + i);
-        
         lv.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, caps));
         lv.setOnItemClickListener((a, v, p, id) -> {
             capituloActual = p + 1;
-            prefs.edit().putInt("last_book", libroId).putInt("last_cap", capituloActual).apply();
-            d.dismiss();
-            render();
+            prefs.edit().putInt("last_cap", capituloActual).apply();
+            d.dismiss(); render();
         });
-        d.setContentView(lv);
-        d.show();
+        d.setContentView(lv); d.show();
     }
 
     private void mostrarSelectorVersiones() {
@@ -255,41 +325,8 @@ public class MainActivity extends AppCompatActivity {
         lv.setOnItemClickListener((a,v,p,id) -> {
             versionActual = files[p];
             prefs.edit().putString("last_version", versionActual).apply();
-            abrirBiblia();
-            d.dismiss();
+            abrirBasesDeDatos(); d.dismiss(); render();
         });
-        d.setContentView(lv);
-        d.show();
-    }
-
-    private void aplicarTema() {
-        findViewById(R.id.rootLayout).setBackgroundColor(modoOscuro ? Color.BLACK : Color.WHITE);
-        txtNavAbrev.setTextColor(modoOscuro ? Color.LTGRAY : Color.DKGRAY);
-    }
-
-    private void mostrarAjustes() {
-        BottomSheetDialog d = new BottomSheetDialog(this);
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(50, 50, 50, 50);
-        
-        TextView t = new TextView(this); t.setText("Tamaño de letra: " + tamanoLetra);
-        SeekBar sb = new SeekBar(this); sb.setMax(20); sb.setProgress(tamanoLetra-10);
-        sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar s, int p, boolean b) {
-                tamanoLetra = p + 10;
-                t.setText("Tamaño de letra: " + tamanoLetra);
-                render();
-            }
-            public void onStartTrackingTouch(SeekBar s) {}
-            public void onStopTrackingTouch(SeekBar s) {
-                prefs.edit().putInt("font_size", tamanoLetra).apply();
-            }
-        });
-        
-        layout.addView(t);
-        layout.addView(sb);
-        d.setContentView(layout);
-        d.show();
+        d.setContentView(lv); d.show();
     }
 }
