@@ -20,6 +20,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays;
+import java.util.Collections;
 
 public class MainActivity extends AppCompatActivity {
     private RecyclerView rvVersiculos;
@@ -113,22 +115,50 @@ public class MainActivity extends AppCompatActivity {
     private void render() {
         if (dbBiblia == null) return;
         listaVersiculos.clear();
+        
+        // Obtenemos el nombre del libro actual para saber si es poético
+        String nombreLibro = "";
+        Cursor cb = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number=" + libroId, null);
+        if (cb.moveToFirst()) nombreLibro = cb.getString(0).toLowerCase();
+        cb.close();
+
         txtNavAbrev.setText(obtenerAbrev(libroId) + " " + capituloActual);
+
+        // Identificamos si es un libro que requiere saltos de línea en cada etiqueta <t>
+        boolean esLibroPoetico = nombreLibro.contains("salmo") || 
+                                nombreLibro.contains("proverbio") || 
+                                nombreLibro.contains("cantar") || 
+                                nombreLibro.contains("lamentaciones") ||
+                                nombreLibro.contains("job");
 
         Cursor c = dbBiblia.rawQuery("SELECT verse, text FROM verses WHERE book_number=" + libroId + " AND chapter=" + capituloActual + " ORDER BY verse ASC", null);
         while (c.moveToNext()) {
             int nV = c.getInt(0);
             String raw = c.getString(1);
 
-            // Lógica de saltos de línea (como en app.py)
-            // Reemplazamos <t/> o <pb/> por un salto simple, no doble.
-            String procesado = raw.replace("<t/>", "\n").replace("<pb/>", "\n");
-            
-            String t = procesado.replaceAll("<[^>]+>", "")
-                         .replaceAll("[\\u24D0-\\u24E9\\u24B6-\\u24CF\\u00AE\\u00A9]", "")
-                         .replaceAll("\\[\\d+\\]", "")
-                         .replaceAll("\\s+", " ").trim();
+            // 1. Manejo de Encabezados (Salmos): Salto y paréntesis
+            raw = raw.replace("<e>", "\n(").replace("</e>", ")\n");
 
+            // 2. Manejo de Párrafos/Diálogos: Salto real
+            raw = raw.replace("<pb/>", "\n");
+
+            // 3. Manejo de Poesía (<t>): Sensible al tipo de libro
+            if (esLibroPoetico) {
+                // En Salmos/Prov, cada <t> es una línea nueva
+                raw = raw.replace("<t>", "\n").replace("</t>", "");
+            } else {
+                // En libros narrativos (como Amós o Juan), el <t> es solo un espacio
+                raw = raw.replace("<t>", " ").replace("</t>", " ");
+            }
+
+            // 4. Limpieza de etiquetas y basura visual (notas al pie, símbolos)
+            String t = raw.replaceAll("<[^>]+>", "")
+                        .replaceAll("\\[\\d+\\]", "")
+                        .replaceAll("[\\u24D0-\\u24E9\\u24B6-\\u24CF\\u00AE\\u00A9]", "")
+                        .replaceAll("\\s+", " ") // Quita dobles espacios resultantes
+                        .trim();
+
+            // 5. Icono de notas (ⓘ)
             String notaIcon = "";
             if (dbNotas != null) {
                 Cursor cN = dbNotas.rawQuery("SELECT text FROM commentaries WHERE book_number="+libroId+" AND chapter_number_from="+capituloActual+" AND verse_number_from="+nV, null);
@@ -136,12 +166,15 @@ public class MainActivity extends AppCompatActivity {
                 cN.close();
             }
 
+            // 6. Color de resaltado
             String color = obtenerColorUser(nV);
-            // Eliminamos el salto inicial para evitar separación excesiva entre versículos
-            listaVersiculos.add(nV + " " + t + notaIcon + (color.isEmpty() ? "" : " ##" + color));
+            
+            // Usamos \u00A0 (espacio de no ruptura) para que el número y el texto siempre estén pegados
+            listaVersiculos.add(nV + "\u00A0" + t + notaIcon + (color.isEmpty() ? "" : " ##" + color));
         }
         c.close();
 
+        // Actualizamos el RecyclerView
         VersiculoAdapter adapter = new VersiculoAdapter(listaVersiculos, tamanoLetra, modoOscuro, tipoFuente, new VersiculoAdapter.OnVersiculoClickListener() {
             @Override public void onShortClick(int position) { verNota(position); }
             @Override public void onLongClick(int position) { mostrarSelectorColoresPorPosicion(position); }
@@ -152,8 +185,10 @@ public class MainActivity extends AppCompatActivity {
     private void verNota(int pos) {
         if (dbNotas == null) return;
         try {
-            String line = listaVersiculos.get(pos).replace("\n", "").trim();
-            int vNum = Integer.parseInt(line.split(" ")[0].replaceAll("[^0-9]", ""));
+            String line = listaVersiculos.get(pos);
+            // Buscamos el número antes del espacio especial \u00A0
+            String vStr = line.split("\u00A0")[0].replaceAll("[^0-9]", "");
+            int vNum = Integer.parseInt(vStr);
 
             Cursor c = dbNotas.rawQuery("SELECT text FROM commentaries WHERE book_number="+libroId+" AND chapter_number_from="+capituloActual+" AND verse_number_from="+vNum, null);
             if (c.moveToFirst()) {
@@ -178,6 +213,42 @@ public class MainActivity extends AppCompatActivity {
         root.setPadding(60, 50, 60, 70);
         root.setBackgroundColor(modoOscuro ? Color.parseColor("#121212") : Color.WHITE);
 
+        // --- TÍTULO SECCIÓN FUENTE ---
+        TextView tFont = new TextView(this);
+        tFont.setText("Tipo de letra:");
+        tFont.setTextColor(modoOscuro ? Color.GRAY : Color.DKGRAY);
+        tFont.setPadding(0, 20, 0, 10);
+        root.addView(tFont);
+
+        // --- GRUPO DE OPCIONES (RadioGroup) ---
+        RadioGroup rg = new RadioGroup(this);
+        String[] fuentes = {"SANS", "SERIF", "MONO"};
+        String[] etiquetas = {"Moderna (Sans)", "Clásica (Serif)", "Sistema (Mono)"};
+
+        for (int i = 0; i < fuentes.length; i++) {
+            RadioButton rb = new RadioButton(this);
+            rb.setText(etiquetas[i]);
+            rb.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
+            final String fVal = fuentes[i];
+            rb.setChecked(tipoFuente.equals(fVal));
+            
+            rb.setOnClickListener(v -> {
+                tipoFuente = fVal;
+                prefs.edit().putString("font_type", fVal).apply();
+                render();
+                // No cerramos el diálogo para que el usuario vea el cambio en tiempo real
+            });
+            rg.addView(rb);
+        }
+        root.addView(rg);
+
+        // --- SEPARADOR ---
+        View separator = new View(this);
+        separator.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2));
+        separator.setBackgroundColor(Color.GRAY);
+        root.addView(separator);
+
+        // --- MODO OSCURO (Tu código actual) ---
         CheckBox cb = new CheckBox(this);
         cb.setText("Modo Oscuro");
         cb.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
@@ -185,12 +256,18 @@ public class MainActivity extends AppCompatActivity {
         cb.setOnCheckedChangeListener((v, isChecked) -> {
             modoOscuro = isChecked;
             prefs.edit().putBoolean("dark_mode", isChecked).apply();
-            aplicarTema(); render(); d.dismiss();
+            aplicarTema(); 
+            render(); 
+            d.dismiss(); // Al cambiar el tema completo es mejor cerrar y refrescar
         });
+        root.addView(cb);
 
+        // --- TAMAÑO DE LETRA (Tu código actual) ---
         TextView tSize = new TextView(this);
         tSize.setText("\nTamaño de letra: " + tamanoLetra);
         tSize.setTextColor(modoOscuro ? Color.WHITE : Color.BLACK);
+        root.addView(tSize);
+
         SeekBar sb = new SeekBar(this);
         sb.setMax(20);
         sb.setProgress(tamanoLetra - 12);
@@ -204,13 +281,11 @@ public class MainActivity extends AppCompatActivity {
             public void onStartTrackingTouch(SeekBar s) {}
             public void onStopTrackingTouch(SeekBar s) {}
         });
-
-        root.addView(cb);
-        root.addView(tSize);
         root.addView(sb);
+
         d.setContentView(root);
         d.show();
-    }
+    }    
 
     private void setupNavigation() {
         BottomNavigationView nav = findViewById(R.id.bottom_navigation);
@@ -224,16 +299,49 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void cambiarCapitulo(int delta) {
+        if (dbBiblia == null) return;
+
         int nCap = capituloActual + delta;
-        if (nCap < 1) return;
+
+        // 1. Obtener el máximo de capítulos del libro actual
         Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number=" + libroId, null);
-        if (c.moveToFirst() && nCap <= c.getInt(0)) {
-            capituloActual = nCap;
-            prefs.edit().putInt("last_cap", capituloActual).apply();
-            render();
-            rvVersiculos.scrollToPosition(0);
-        }
+        int maxCapActual = (c.moveToFirst()) ? c.getInt(0) : 1;
         c.close();
+
+        if (nCap < 1) {
+            // --- IR AL LIBRO ANTERIOR ---
+            // Buscamos el ID del libro que esté inmediatamente antes del actual
+            Cursor cPrevLib = dbBiblia.rawQuery("SELECT book_number FROM books WHERE book_number < " + libroId + " ORDER BY book_number DESC LIMIT 1", null);
+            
+            if (cPrevLib.moveToFirst()) {
+                libroId = cPrevLib.getInt(0);
+                // Al ir atrás, queremos el ÚLTIMO capítulo del libro anterior
+                Cursor cLastCap = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number=" + libroId, null);
+                capituloActual = (cLastCap.moveToFirst()) ? cLastCap.getInt(0) : 1;
+                cLastCap.close();
+            }
+            cPrevLib.close();
+
+        } else if (nCap > maxCapActual) {
+            // --- IR AL SIGUIENTE LIBRO ---
+            // Buscamos el ID del libro que esté inmediatamente después del actual
+            Cursor cNextLib = dbBiblia.rawQuery("SELECT book_number FROM books WHERE book_number > " + libroId + " ORDER BY book_number ASC LIMIT 1", null);
+            
+            if (cNextLib.moveToFirst()) {
+                libroId = cNextLib.getInt(0);
+                capituloActual = 1; // Empezamos en el primer capítulo
+            }
+            cNextLib.close();
+
+        } else {
+            // --- CAMBIO NORMAL (Mismo libro) ---
+            capituloActual = nCap;
+        }
+
+        // 2. Guardar progreso, refrescar pantalla y subir al inicio
+        prefs.edit().putInt("last_book", libroId).putInt("last_cap", capituloActual).apply();
+        render();
+        rvVersiculos.scrollToPosition(0);
     }
 
     private String obtenerAbrev(int id) {
