@@ -37,8 +37,8 @@ public class VersiculoAdapter extends RecyclerView.Adapter<VersiculoAdapter.View
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         TextView tv = new TextView(parent.getContext());
-        tv.setPadding(40, 20, 40, 20); // Un poco más de margen lateral
-        tv.setLineSpacing(0, 1.2f); // Mejora la lectura entre líneas
+        tv.setPadding(40, 5, 40, 5); // Un poco más de margen lateral
+        tv.setLineSpacing(0, 1.1f); // Mejora la lectura entre líneas
         tv.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return new ViewHolder(tv);
     }

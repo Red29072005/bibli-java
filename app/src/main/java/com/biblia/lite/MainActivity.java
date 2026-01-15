@@ -137,40 +137,41 @@ public class MainActivity extends AppCompatActivity {
             int nV = c.getInt(0);
             String raw = c.getString(1);
 
-            // 1. Manejo de Encabezados (Salmos): Salto y paréntesis
+            // 1. Manejo de Encabezados (Salmos)
             raw = raw.replace("<e>", "\n(").replace("</e>", ")\n");
 
-            // 2. Manejo de Párrafos/Diálogos: Salto real
+            // 2. Diálogos y Párrafos: Convertimos <pb/> en saltos de línea reales
             raw = raw.replace("<pb/>", "\n");
 
-            // 3. Manejo de Poesía (<t>): Sensible al tipo de libro
+            // 3. Poesía: En libros poéticos, <t> es salto de línea. 
+            // En otros, es un espacio para que no corte la frase.
             if (esLibroPoetico) {
-                // En Salmos/Prov, cada <t> es una línea nueva
                 raw = raw.replace("<t>", "\n").replace("</t>", "");
             } else {
-                // En libros narrativos (como Amós o Juan), el <t> es solo un espacio
                 raw = raw.replace("<t>", " ").replace("</t>", " ");
             }
 
-            // 4. Limpieza de etiquetas y basura visual (notas al pie, símbolos)
+            // 4. LIMPIEZA INTELIGENTE:
+            // Quitamos etiquetas pero preservamos los \n que acabamos de crear
             String t = raw.replaceAll("<[^>]+>", "")
                         .replaceAll("\\[\\d+\\]", "")
                         .replaceAll("[\\u24D0-\\u24E9\\u24B6-\\u24CF\\u00AE\\u00A9]", "")
-                        .replaceAll("\\s+", " ") // Quita dobles espacios resultantes
                         .trim();
 
-            // 5. Icono de notas (ⓘ)
+            // 5. Notas y Color (Igual que antes)
             String notaIcon = "";
             if (dbNotas != null) {
                 Cursor cN = dbNotas.rawQuery("SELECT text FROM commentaries WHERE book_number="+libroId+" AND chapter_number_from="+capituloActual+" AND verse_number_from="+nV, null);
                 if (cN.moveToFirst()) notaIcon = " ⓘ";
                 cN.close();
             }
-
-            // 6. Color de resaltado
             String color = obtenerColorUser(nV);
-            
-            // Usamos \u00A0 (espacio de no ruptura) para que el número y el texto siempre estén pegados
+
+            // 6. EL TRUCO PARA LA CONTINUIDAD:
+            // Agregamos el versículo. Al final NO agregamos \n extra. 
+            // El RecyclerView ya separa cada item un poco, pero si quieres que sea
+            // todo un solo bloque, tendríamos que unir los versículos en un solo String.
+            // Por ahora, lo dejamos así para que el resaltado de colores siga funcionando:
             listaVersiculos.add(nV + "\u00A0" + t + notaIcon + (color.isEmpty() ? "" : " ##" + color));
         }
         c.close();
