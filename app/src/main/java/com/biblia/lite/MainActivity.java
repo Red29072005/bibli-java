@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Collections;
+import android.view.ViewGroup;
 
 public class MainActivity extends AppCompatActivity {
     private RecyclerView rvVersiculos;
