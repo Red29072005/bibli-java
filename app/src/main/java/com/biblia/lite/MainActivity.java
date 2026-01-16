@@ -300,47 +300,89 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+        // Reemplaza tu antiguo cambiarCapitulo por este NUEVO:
     private void cambiarCapitulo(int delta) {
         if (dbBiblia == null) return;
 
         int nCap = capituloActual + delta;
 
-        // 1. Obtener el máximo de capítulos del libro actual
+        // 1. Obtener cuántos capítulos tiene el libro actual
         Cursor c = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number=" + libroId, null);
         int maxCapActual = (c.moveToFirst()) ? c.getInt(0) : 1;
         c.close();
 
         if (nCap < 1) {
-            // --- IR AL LIBRO ANTERIOR ---
-            // Buscamos el ID del libro que esté inmediatamente antes del actual
-            Cursor cPrevLib = dbBiblia.rawQuery("SELECT book_number FROM books WHERE book_number < " + libroId + " ORDER BY book_number DESC LIMIT 1", null);
-            
-            if (cPrevLib.moveToFirst()) {
-                libroId = cPrevLib.getInt(0);
-                // Al ir atrás, queremos el ÚLTIMO capítulo del libro anterior
-                Cursor cLastCap = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number=" + libroId, null);
-                capituloActual = (cLastCap.moveToFirst()) ? cLastCap.getInt(0) : 1;
-                cLastCap.close();
-            }
-            cPrevLib.close();
+            // --- IR AL LIBRO ANTERIOR (Según TU orden cronológico) ---
+            cambiarDeLibro(-1);
 
         } else if (nCap > maxCapActual) {
-            // --- IR AL SIGUIENTE LIBRO ---
-            // Buscamos el ID del libro que esté inmediatamente después del actual
-            Cursor cNextLib = dbBiblia.rawQuery("SELECT book_number FROM books WHERE book_number > " + libroId + " ORDER BY book_number ASC LIMIT 1", null);
-            
-            if (cNextLib.moveToFirst()) {
-                libroId = cNextLib.getInt(0);
-                capituloActual = 1; // Empezamos en el primer capítulo
-            }
-            cNextLib.close();
+            // --- IR AL SIGUIENTE LIBRO (Según TU orden cronológico) ---
+            cambiarDeLibro(1);
 
         } else {
             // --- CAMBIO NORMAL (Mismo libro) ---
             capituloActual = nCap;
+            guardarYRenderizar();
+        }
+    }
+
+    // NUEVO MÉTODO AUXILIAR PARA NAVEGAR POR TU LISTA
+    private void cambiarDeLibro(int direccion) {
+        // 1. Averiguar el nombre del libro actual usando el ID
+        String nombreActual = "";
+        Cursor c = dbBiblia.rawQuery("SELECT long_name FROM books WHERE book_number=" + libroId, null);
+        if (c.moveToFirst()) nombreActual = c.getString(0);
+        c.close();
+
+        // 2. Buscar en qué posición de TU lista está ese nombre
+        int indiceActual = -1;
+        for (int i = 0; i < ORDEN_LIBROS.length; i++) {
+            // Usamos contains para asegurar coincidencia (ej: "1 Samuel" en "1 Samuel")
+            if (nombreActual.toLowerCase().contains(ORDEN_LIBROS[i].toLowerCase()) || 
+                ORDEN_LIBROS[i].toLowerCase().contains(nombreActual.toLowerCase())) {
+                indiceActual = i;
+                break;
+            }
         }
 
-        // 2. Guardar progreso, refrescar pantalla y subir al inicio
+        // 3. Calcular el nuevo índice
+        int nuevoIndice = indiceActual + direccion;
+
+        // Validar que no nos salgamos de la lista
+        if (nuevoIndice >= 0 && nuevoIndice < ORDEN_LIBROS.length) {
+            String nuevoNombre = ORDEN_LIBROS[nuevoIndice];
+            
+            // 4. Buscar el ID de ese nuevo nombre en la DB
+            int nuevoID = obtenerIdPorNombre(nuevoNombre);
+            
+            if (nuevoID != -1) {
+                libroId = nuevoID;
+                // Si vamos hacia atrás (-1), queremos el ÚLTIMO capítulo del nuevo libro
+                if (direccion < 0) {
+                    Cursor cLast = dbBiblia.rawQuery("SELECT MAX(chapter) FROM verses WHERE book_number=" + libroId, null);
+                    capituloActual = (cLast.moveToFirst()) ? cLast.getInt(0) : 1;
+                    cLast.close();
+                } else {
+                    // Si vamos hacia adelante (1), queremos el PRIMER capítulo
+                    capituloActual = 1;
+                }
+                guardarYRenderizar();
+            }
+        }
+    }
+
+    // OTRO AUXILIAR NECESARIO
+    private int obtenerIdPorNombre(String nombre) {
+        int id = -1;
+        // Usamos LIKE para ser flexibles con los nombres
+        Cursor c = dbBiblia.rawQuery("SELECT book_number FROM books WHERE long_name LIKE '%" + nombre + "%' LIMIT 1", null);
+        if (c.moveToFirst()) id = c.getInt(0);
+        c.close();
+        return id;
+    }
+
+    // PEQUEÑO AUXILIAR PARA NO REPETIR CÓDIGO
+    private void guardarYRenderizar() {
         prefs.edit().putInt("last_book", libroId).putInt("last_cap", capituloActual).apply();
         render();
         rvVersiculos.scrollToPosition(0);
